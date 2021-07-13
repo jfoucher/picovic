@@ -13,8 +13,8 @@
 #include "hardware/vreg.h"
 #include "pico/time.h"
 #include "pico/multicore.h"
-#include "pico/scanvideo.h"
-#include "pico/scanvideo/composable_scanline.h"
+#include "scanvideo/scanvideo.h"
+#include "scanvideo/composable_scanline.h"
 #include "pico/sync.h"
 #include "hardware/clocks.h"
 #include "hardware/vreg.h"
@@ -30,7 +30,7 @@
 #define TESTING
 
 // Delay startup by so many seconds
-//#define START_DELAY 6
+// #define START_DELAY 6
 
 void core1_func();
 static semaphore_t video_initted;
@@ -46,7 +46,7 @@ bool running = true;
 int main() {
 #ifdef OVERCLOCK
     vreg_set_voltage(VREG_VOLTAGE_1_15);
-    set_sys_clock_khz(250000, true);
+    set_sys_clock_khz(260000, true);
 #endif
     stdio_init_all();
 
@@ -56,7 +56,7 @@ int main() {
         sleep_ms(1000);
     }
 #endif
-    printf("Starting\n");
+    //printf("Starting\n");
 
     //prepare vga
     // create a semaphore to be posted when video init is complete

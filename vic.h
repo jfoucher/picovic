@@ -9,14 +9,14 @@
 #define VIC_H_
 
 #include <stdint.h>
-#include "pico/scanvideo.h"
-#include "pico/scanvideo/composable_scanline.h"
+#include "scanvideo/scanvideo.h"
+#include "scanvideo/composable_scanline.h"
 #include "pico/multicore.h"
 #include "pico/sync.h"
 #define _VIC20_STD_DISPLAY_WIDTH (232)  /* actually 229, but rounded up to 8x */
 #define _VIC20_STD_DISPLAY_HEIGHT (272)
 
-#define vga_mode vga_mode_640x480_60
+#define vga_mode vga_mode_1024x768_60
 
 #define        SCREEN_ADDR (0x1000)
 #define        COLOUR_ADDR (0x9400)
@@ -57,7 +57,7 @@ typedef struct rgbu8_st_ {
 } rgbu8_st;
 
 
-void     vic_init(unsigned char *mem_in);
+void     vic_init(uint8_t *mem_in);
 void     vic_get_screen_sz(uint16_t *width, uint16_t *height);
 
 void vic_draw_color_bar(scanvideo_scanline_buffer_t *buffer);

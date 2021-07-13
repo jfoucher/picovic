@@ -11,6 +11,13 @@ if (TARGET tinyusb_device)
         vic.h
         cpu_6502M0.S
         cpu_6502.h
+        scanvideo/vga_modes.c
+        scanvideo/composable_scanline.h
+        scanvideo/scanvideo.h
+        scanvideo/scanvideo.c
+        scanvideo/buffer.h
+        scanvideo/buffer.c
+        scanvideo/scanvideo_base.h
         main.c
     )
 
@@ -19,8 +26,10 @@ if (TARGET tinyusb_device)
     project(vic20as C ASM)
 
     # Pull in our pico_stdlib which aggregates commonly used features
-    target_link_libraries(vic20as pico_stdlib hardware_timer hardware_vreg pico_multicore pico_scanvideo_dpi)
+    target_link_libraries(vic20as pico_stdlib hardware_timer hardware_vreg pico_multicore hardware_pio hardware_dma hardware_irq)
 
+    pico_generate_pio_header(vic20as ${CMAKE_CURRENT_LIST_DIR}/scanvideo/scanvideo.pio)
+    pico_generate_pio_header(vic20as ${CMAKE_CURRENT_LIST_DIR}/scanvideo/timing.pio)
 
     # enable usb output, disable uart output
     pico_enable_stdio_usb(vic20as 1)

@@ -1876,7 +1876,7 @@ l_fe: // Opcode FE - INC $0000,X
 l_ff: // Opcode FF - BBS7
    BBS 7
 tablend:
-. = 256*(I_ALIGN+6)
+. = 256*(I_ALIGN)
 .print "Instruction table is the correct length."
 
 // **********************************************
