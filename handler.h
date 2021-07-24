@@ -22,7 +22,8 @@ extern unsigned char * mem_reset();
 
 extern void exec_65(unsigned char *memory, unsigned int speed);
 
-extern void memory_read( uint16_t address);
+extern uint8_t io_read( uint16_t address);
+extern void io_write( uint8_t data, uint16_t address);
 
 extern void callback(uint8_t inst);
 

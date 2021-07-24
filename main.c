@@ -30,7 +30,7 @@
 #define TESTING
 
 // Delay startup by so many seconds
-// #define START_DELAY 6
+#define START_DELAY 6
 
 void core1_func();
 static semaphore_t video_initted;

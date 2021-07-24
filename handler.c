@@ -19,6 +19,20 @@
 #define CHAR_BUFFER_ADDRESS 0x277
 #define CHAR_BUFFER_NUM_ADDRESS 0xC6
 
+#define VIA2_BASE (0x9120)
+#define VIA2_PORTB  (VIA2_BASE)
+#define VIA2_PORTA  (VIA2_BASE+1)
+#define VIA2_DDRB   (VIA2_BASE+2)
+#define VIA2_DDRA   (VIA2_BASE+3)
+#define VIA2_T1CL   (VIA2_BASE + 4)
+#define VIA2_T1CH   (VIA2_BASE + 5)
+#define VIA2_T1LL   (VIA2_BASE + 6)
+#define VIA2_T1LH   (VIA2_BASE + 7)
+#define VIA2_ACR    (VIA2_BASE + 0xB)
+#define VIA2_PCR    (VIA2_BASE + 0xC)
+#define VIA2_IFR    (VIA2_BASE + 0xD)
+#define VIA2_IER    (VIA2_BASE + 0xE)
+
 //extern uint32_t ticks;
 
 uint64_t ticks = 0;
@@ -71,7 +85,9 @@ extern void callback(uint8_t inst)
 
    gotchar = get_absolute_time();
    if (absolute_time_diff_us(lastgotchar, gotchar) > 16000) {
+      // tube_irq |= IRQ_BIT;
 
+      mpu_memory[VIA2_IFR] = 0xC0;
       // Update elapsed time
       uint time = mpu_memory[0xA0] << 16 | mpu_memory[0xA1] << 8 | mpu_memory[0xA2];
       time++;
@@ -164,6 +180,24 @@ extern void callback(uint8_t inst)
    // }
 }
 
+extern uint8_t io_read( uint16_t address) {
+   //if ((address >> 9) == 0x48) {
+      printf("read address: %04X\n", address);
+   //}
+
+   if (address == VIA2_T1CL || address == VIA2_T1LL) {
+      // Clear interrupt
+      tube_irq &= ~IRQ_BIT;
+      mpu_memory[VIA2_IFR] = 0x00;
+   }
+   
+   return mpu_memory[address];
+}
+extern void io_write( uint8_t data, uint16_t address) {
+   if ((address >> 9) == 0x48) {
+      printf("write address: %04X data: %02X\n", address, data);
+   }
+}
 
 unsigned char * mem_reset(int length)
 {

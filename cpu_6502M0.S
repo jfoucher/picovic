@@ -46,7 +46,7 @@ r1  effective address
 #define insttable  r9  /* pointer instruction table */
 #define rPbyteLo   r10 /* Process status byte Lo */ /*V D and I in 6502 order: nv-bdizc */
 #define rXreg      r11 /* x index register */
-#define tregs      r12 // constant 0xFEF8>>3
+#define tregs      r12 // constant 0x9000>>3
 #define temp       lr
 
 #define rCarrybit 0
@@ -71,12 +71,10 @@ r1  effective address
 #define EVENT_HANDLER_FLAG I_ALIGN*256
 #define EVENT_HANDLER_SLOW_FLAG EVENT_HANDLER_FLAG<<1
 
-#define VIC_REGS 0x9000 >> 4
-#define VIA1_REGS 0x9110 >> 4
-#define VIA2_REGS 0x9120 >> 4
+#define IO_REGS 0x9120
 
 @ .global ticks
-@ .extern mem_read
+.extern io_read
 .thumb
 @ .syntax unified
 .text
@@ -128,26 +126,26 @@ r1  effective address
 // IRQ and NMI B =0
 // Other interrupts don't set the the B flag
 
-.macro statustoR0 bflag
-   LSL   r0, rflagsNZ,#24   // lower bytes cleared
+.macro statustoR reg bflag
+   LSL   \reg, rflagsNZ,#24   // lower bytes cleared
    BNE   1f
-   add   r0, #pByteZflag
+   add   \reg, #pByteZflag
 1:
    cmp   rflagsNZ,#0xff
    BLS   2f
-   add   r0, #pByteNflag
+   add   \reg, #pByteNflag
 2:
    SETUP_CARRY r1
    BCC   3f
-   add   r0, #pByteCflag
+   add   \reg, #pByteCflag
 3:
 .ifc \bflag,bflag
-   add   r0, #pByteXflag+pByteBflag
+   add   \reg, #pByteXflag+pByteBflag
 .else
-   add   r0, #pByteXflag
+   add   \reg, #pByteXflag
 .endif
    mov   r1, rPbyteLo
-   orr   r0, r1  // add in V, D and I flags
+   orr   \reg, r1  // add in V, D and I flags
 .endm
 
 @ convert from 6502 status byte (nv-bdizc) in r0 to ARMs Pbyte (NZCV)
@@ -280,27 +278,7 @@ r1  effective address
 
 .macro LOAD_ABS_IO reg=r0
    GET_ABS_LOCATION r0
-   // Check for IO access
-   LSR   r1,r0,#3
-   cmp   r1, tregs   // need to compare with 0xFEF8>>3
-   bne   1f
-.ifnc \reg,rAcc
-   push  {rAcc}
-.endif
-   @blx   tube_parasite_read
-.ifnc \reg,rAcc
-   pop   {rAcc}
-.endif
-   ldr   r1,=0xfef8>>3
-   mov   tregs,r1
-
-.ifnc \reg,r0
-   mov   \reg, r0
-.endif
-   b     2f
-1:
    LOAD_BYTE \reg, r0
-2:
 .endm
 
 .macro LOAD_INY reg=r0 // ($00),Y
@@ -333,100 +311,70 @@ r1  effective address
    LOAD_BYTE \reg, r1
 .endm
 
-.macro LOAD_BYTE_R0 rsrc
-   @ push { r1, r2, r3 }
-   @ mov r0, \rsrc
-   @ bl memory_read
-   @ pop { r1, r2, r3 }
+.macro SAVE_REGS rdst=r0
+   .ifc r0, \rdst
+   push {r1,r2-r3}
+   .endif
+   .ifc r1, \rdst
+   push {r0,r2-r3}
+   .endif
+   .ifc r2, \rdst
+   push {r0-r1,r3}
+   .endif
+   .ifc r3, \rdst
+   push {r0-r1,r2}
+   .endif
 .endm
+
+
+.macro RESTORE_REGS rdst=r0
+   .ifc r0, \rdst
+   @ ldr   r1,=IO_REGS>>3
+   @ mov   tregs,r1
+   pop {r1,r2-r3}
+   .endif
+   .ifc r1, \rdst
+   @ ldr   r0,=IO_REGS>>3
+   @ mov   tregs,r0
+   pop {r0,r2-r3}
+   .endif
+   .ifc r2, \rdst
+   @ ldr   r0,=IO_REGS>>3
+   @ mov   tregs,r0
+   pop {r0-r1,r3}
+   .endif
+   .ifc r3, \rdst
+   @ ldr   r0,=IO_REGS>>3
+   @ mov   tregs,r0
+   pop {r0-r1,r2}
+   .endif
+.endm
+
 
 .macro LOAD_BYTE rdst=r0 rsrc=r1
    @ rsrc is mostly r1 except in four instructions where it is r0
+   lsr \rdst, \rsrc, #3
+   push {r0}
+   ldr   r0,=IO_REGS>>3    @ load tregs here because it gets cloberred somewhere
+   mov   tregs,r0
+   pop {r0}
+   cmp   \rdst, tregs   // need to compare with 0x9000>>3
+   bne   1f
 
-   .ifc \rdst, r0
-      LOAD_BYTE_R0 \rsrc
+   SAVE_REGS \rdst
+   mov r0, \rsrc
+   blx io_read
+   .ifnc r0, \rdst
+   mov \rdst, r0
    .endif
-
+   RESTORE_REGS \rdst
+   b 2f
+1: 
    ldrb \rdst,[ rmem, \rsrc]
-
-
-   @ .ifc \rdst, r0       @ if the destination is not r0
-   @    push {r0}            @ save it
-   @ .endif
-   @ .ifnc \rdst, r1         @ if the destination is not r1
-   @    push {r1}            @ save it
-   @ .endif
-   @ .ifnc \rdst, r2         @ if the destination is not r0
-   @    push {r2}            @ save it
-   @ .endif
-   @ .ifnc \rdst, rPC         @ if the destination is not r1
-   @    push {rPC}            @ save it
-   @ .endif
-   @ .ifnc \rdst, rAcc
-   @    push  {rAcc}
-   @ .endif
-   
-   @ .ifnc \rsrc, r0            @ if the address is not in r0
-   @    .ifnc \rdst, r0         @ and not the destination
-   @       push {r0}               @ save it
-   @    .endif
-   @    mov r0, \rsrc           @ move it to r0 to pass to function
-
-   @ .endif
-
-   
-   @ blx memory_read          @ read from memory
-
-
-   @ .ifnc \rsrc, r0           @ if the address is not in r0
-   @    .ifnc \rdst, r0         @ if r0 not the destination either
-   @       pop {r0}               @ restore it
-   @    .endif
-   @ .endif
-   @ .ifnc \rdst, rAcc         @ if the destination is not r1
-   @    pop {rAcc}            @ restore it
-   @ .endif
-   @ .ifnc \rdst, rPC         @ if the destination is not r1
-   @    pop {rPC}            @ save it
-   @ .endif
-
-   @ .ifnc \rdst, r2         @ if the destination is not r1
-   @    pop {r2}            @ restore it
-   @ .endif
-   @ .ifnc \rdst, r1         @ if the destination is not r1
-   @    pop {r1}            @ restore it
-   @ .endif
-   @ .ifnc \rdst, r0         @ if the destination is not r0
-   @    mov \rdst, r0        @ move r0 to the destination
-   @    pop {r0}             @ restore r0
-   @ .endif
-   
-   
-
-   // Check for IO access
-   
-@    LSR   \rdst,\rsrc,#3
-@    @cmp   \rdst, tregs   // need to compare with 0xFEF8>>3
-@    bne   1f
-@    @ b   1f
-@    @ mov r0, \rsrc
-@    @ blx   memory_read
-
-@    @ ldr   r1,=0xfef8>>3
-@    @ mov   tregs,r1
-
-@ .ifnc \rdst,r0
-@    @mov   \rdst, r0
-@ .endif
-@    @b     2f
-1:
-
-   @ldrb \rdst,[ rmem, \rsrc]
 2:
 .endm
 
 .macro STORE_BYTE_ONLY
-   @blx mem_store
    strb r0,[ rmem, r1]
 .endm
 
@@ -443,10 +391,10 @@ r1  effective address
    push  {r2,r3}
    mov   r1,\rsrc
    // r0 = address r1 = data
-   @ blx   tube_parasite_write
+   blx   io_write
    pop   {r2,r3}
-   ldr   r1,=0xfef8>>3
-   mov   r12,r1
+   ldr   r1,=IO_REGS>>3
+   mov   tregs,r1
    NEXT_INSTRUCTION 2 noalign
 1:
 .ifc \rsrc,rXreg
@@ -483,14 +431,18 @@ r1  effective address
    strb  rPC, [r0, #2]           @ store low byte of pc into stack pointer
    LSR   rPC, rPC,#8             @ shift pc right by 8 to get high byte
    strb  rPC, [r0, #3]           @ store high byte of pc into stack pointer
-   mov   rPC, r0                 @ rPC now becomes the stack pointer ?
+   @mov   rPC, r0                 @ rPC now becomes the stack pointer ?
    @ push pByte in 6502 format
-   statustoR0 \bflag             @ put status register into r0
+   statustoR rPC \bflag
+   @statustoR r0 \bflag             @ put status register into r0
 
-   strb  r0, [rPC,#1]            @ store status register in stack
+   strb  rPC, [r0,#1]            @ store status register in stack
 
    mov   r0, #pByteIflag         @ BRK sets interrupt disable just as IRQ would
-   mov   rPbyteLo, r0            @ I set B clear and clear DEC flag
+   orr   r1, r0
+   mov   r0, #pByteDflag
+   bic   r1, r0
+   mov   rPbyteLo, r1            @ I set B clear and clear DEC flag
 
    ldr   rPC, =0x10000-\vector   @ put the vector into PC
    ldrh  rPC, [rPC, rmem]        @ put address at vector into PC // vectors are aligned so we can use ldrh
@@ -546,8 +498,8 @@ r1  effective address
    NEXT_INSTRUCTION \inc
 .endm
 
-.macro NOP inc
-   NEXT_INSTRUCTION \inc
+.macro NOP inc align=align
+   NEXT_INSTRUCTION \inc \align
 .endm
 
 .macro RMB bitnum
@@ -732,13 +684,13 @@ r1  effective address
 
 
 .section .time_critical.6502, "ax"
-.balign (I_ALIGN)*256 , 0
+.balign 0 , 0
      /* 6502 instruction set */
 l_00:
 breakinstruction:
    add rPC,#1
    INTR 2 bflag
-   NEXT_INSTRUCTION 0 noalign //NB we don't want .ltorg here or we overflow
+   B l_00_overflow //NB we don't want .ltorg here or we overflow
    .balign I_ALIGN, 0
 
 l_01: // Opcode 01 - ORA ($00,X)
@@ -746,8 +698,9 @@ l_01: // Opcode 01 - ORA ($00,X)
    LOGICAL 1 orr
 
 l_02:
-   NOP 1
-
+   NOP 1 noalign
+l_00_overflow:
+   NEXT_INSTRUCTION 0 
 l_03:
    NOP 0
 
@@ -773,7 +726,7 @@ l_07: // Opcode 07 - RMB0 $00
    RMB 0
 
 l_08: // Opcode 08 - PHP
-   statustoR0 bflag
+   statustoR r0 bflag
    pushbyte r0 wrap
    NEXT_INSTRUCTION 0
 
@@ -944,17 +897,17 @@ l_2b:
    BL l_ea
 bitjumpload:
    push  {r3}
-   @ blx   tube_parasite_read
+   blx   io_read
    pop   {r3}
-   ldr   r1,=0xfef8>>3
-   mov   r12, r1
+   ldr   r1,=IO_REGS>>3
+   mov   tregs, r1
    BIT 2
 
 l_2c: // Opcode 2C - BIT $0000
    GET_ABS_LOCATION r0
    // Check for IO access
    LSR   r1, r0, #3
-   cmp   r1, tregs   // need to compare with 0xFEF8>>3
+   cmp   r1, tregs   // need to compare with IO_REGS>>3
    beq   bitjumpload
    LOAD_BYTE r0, r0
    BIT 2
@@ -2402,7 +2355,7 @@ exec_65:
    ldr  r2,=(l_00)+1
    mov  insttable, r2
 
-   ldr   r0, =(0xfef8)>>3
+   ldr   r0, =IO_REGS>>3
    mov   tregs, r0
 
    mov   rflagsNZ,#0  // Clear N and Z flag
