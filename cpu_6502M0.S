@@ -128,26 +128,26 @@ r1  effective address
 // IRQ and NMI B =0
 // Other interrupts don't set the the B flag
 
-.macro statustoR0 bflag
-   LSL   r0, rflagsNZ,#24   // lower bytes cleared
+.macro statustoR reg bflag
+   LSL   \reg, rflagsNZ,#24   // lower bytes cleared
    BNE   1f
-   add   r0, #pByteZflag
+   add   \reg, #pByteZflag
 1:
    cmp   rflagsNZ,#0xff
    BLS   2f
-   add   r0, #pByteNflag
+   add   \reg, #pByteNflag
 2:
    SETUP_CARRY r1
    BCC   3f
-   add   r0, #pByteCflag
+   add   \reg, #pByteCflag
 3:
 .ifc \bflag,bflag
-   add   r0, #pByteXflag+pByteBflag
+   add   \reg, #pByteXflag+pByteBflag
 .else
-   add   r0, #pByteXflag
+   add   \reg, #pByteXflag
 .endif
    mov   r1, rPbyteLo
-   orr   r0, r1  // add in V, D and I flags
+   orr   \reg, r1  // add in V, D and I flags
 .endm
 
 @ convert from 6502 status byte (nv-bdizc) in r0 to ARMs Pbyte (NZCV)
@@ -476,25 +476,27 @@ r1  effective address
 
 .macro INTR vector bflag
 
-   mov   r0, rSP                 @ put stack pointer in r0
-   sub   r0, #3                  @ subtract 3 to get stack pointer after BRK
-   mov   rSP, r0                 @ store into rSP
-   sub   rPC, rmem               @ get the 6502 PC address
-   strb  rPC, [r0, #2]           @ store low byte of pc into stack pointer
-   LSR   rPC, rPC,#8             @ shift pc right by 8 to get high byte
-   strb  rPC, [r0, #3]           @ store high byte of pc into stack pointer
-   mov   rPC, r0                 @ rPC now becomes the stack pointer ?
+   mov   r0, rSP
+   sub   r0, #3
+   mov   rSP, r0
+   sub   rPC, rmem
+   strb  rPC, [r0, #2]
+   LSR   rPC, rPC,#8
+   strb  rPC, [r0, #3]
    @ push pByte in 6502 format
-   statustoR0 \bflag             @ put status register into r0
+   statustoR rPC \bflag
 
-   strb  r0, [rPC,#1]            @ store status register in stack
+   strb  rPC, [r0,#1]
 
-   mov   r0, #pByteIflag         @ BRK sets interrupt disable just as IRQ would
-   mov   rPbyteLo, r0            @ I set B clear and clear DEC flag
+   mov   r0, #pByteIflag  @ BRK sets interrupt disable just as IRQ would
+   orr   r1, r0
+   mov   r0, #pByteDflag
+   bic   r1, r0
+   mov   rPbyteLo, r1 // I set B clear and clear DEC flag
 
-   ldr   rPC, =0x10000-\vector   @ put the vector into PC
-   ldrh  rPC, [rPC, rmem]        @ put address at vector into PC // vectors are aligned so we can use ldrh
-   add   rPC, rmem               @ add the base address to it
+   ldr   rPC, =0x10000-\vector
+   ldrh  rPC, [rPC, rmem]  // vectors are aligned so we can use ldrh
+   add   rPC, rmem
 .endm
 
 /* more stack operations */
@@ -773,7 +775,7 @@ l_07: // Opcode 07 - RMB0 $00
    RMB 0
 
 l_08: // Opcode 08 - PHP
-   statustoR0 bflag
+   statustoR r0 bflag
    pushbyte r0 wrap
    NEXT_INSTRUCTION 0
 
@@ -1876,7 +1878,7 @@ l_fe: // Opcode FE - INC $0000,X
 l_ff: // Opcode FF - BBS7
    BBS 7
 tablend:
-. = 256*(I_ALIGN)
+. = 256*(I_ALIGN)*2
 .print "Instruction table is the correct length."
 
 // **********************************************
