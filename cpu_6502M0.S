@@ -46,7 +46,7 @@ r1  effective address
 #define insttable  r9  /* pointer instruction table */
 #define rPbyteLo   r10 /* Process status byte Lo */ /*V D and I in 6502 order: nv-bdizc */
 #define rXreg      r11 /* x index register */
-#define tregs      r12 // constant 0x9000>>3
+#define tregs      r12 // constant 0x9000>>4
 #define temp       lr
 
 #define rCarrybit 0
@@ -276,10 +276,6 @@ r1  effective address
    LOAD_BYTE \reg, r1
 .endm
 
-.macro LOAD_ABS_IO reg=r0
-   GET_ABS_LOCATION r0
-   LOAD_BYTE \reg, r0
-.endm
 
 .macro LOAD_INY reg=r0 // ($00),Y
    GET_INY_LOCATION
@@ -352,13 +348,16 @@ r1  effective address
 
 
 .macro LOAD_BYTE rdst=r0 rsrc=r1
-   @ rsrc is mostly r1 except in four instructions where it is r0
-   lsr \rdst, \rsrc, #3
+   @ .print "load byte src: \rsrc dst: \rdst"
+   @ rsrc is always r1
+   
    push {r0}
-   ldr   r0,=IO_REGS>>3    @ load tregs here because it gets cloberred somewhere
+   ldr   r0,=IO_REGS>>4    @ load tregs here because it gets cloberred somewhere
    mov   tregs,r0
    pop {r0}
-   cmp   \rdst, tregs   // need to compare with 0x9000>>3
+
+   lsr \rdst, \rsrc, #4
+   cmp   \rdst, tregs   // need to compare with 0x9000>>4
    bne   1f
 
    SAVE_REGS \rdst
@@ -375,33 +374,81 @@ r1  effective address
 .endm
 
 .macro STORE_BYTE_ONLY
+   push {r0-r3}
+   lsr   r2, r1, #4
+   ldr   r3,=IO_REGS>>4    @ load tregs here because it gets cloberred somewhere
+   mov   tregs,r3
+   cmp   r2, tregs   // need to compare with 0x9000>>3
+   bne   1f
+   blx   io_write
+   pop   {r0-r3}
+   b 2f
+1:
+   pop   {r0-r3}
    strb r0,[ rmem, r1]
+2:
 .endm
 
 .macro STORE_BYTE inc=1 rsrc=r0 rdst=r1
-   @blx mem_store
+   push  {r2-r3}
+   lsr   r2, \rdst, #4
+   ldr   r3,=IO_REGS>>4    @ load tregs here because it gets cloberred somewhere
+   mov   tregs,r3
+   cmp   r2, tregs   // need to compare with 0x9000>>3
+   bne   1f
+   pop   {r2-r3}
+   push  {r0-r3}
+
+   
+
+   // rdst is always r1
+   // rsrc can be r0, r3, r4
+
+   // rdst should go in r1
+   // rsrc should go in r0
+   .ifnc r0, \rsrc
+      mov r0, \rsrc
+   .endif
+
+   blx   io_write
+   pop   {r0-r3}
+   
+   b 2f
+1:
+   pop   {r2-r3}
    strb    \rsrc,[ rmem, \rdst ]
+2:
    NEXT_INSTRUCTION \inc
 .endm
 
 .macro STORE_BYTE_ABS rsrc rdst
-   LSR   r1, \rdst, #3
-   CMP   r1, tregs
+   push  {r2-r3}
+   LSR   r2, \rdst, #4
+   ldr   r3,=IO_REGS>>4
+   mov   tregs,r3
+   CMP   r2, tregs
    bne   1f
-   push  {r2,r3}
-   mov   r1,\rsrc
-   // r0 = address r1 = data
+   pop   {r2-r3}
+   push  {r0-r3}
+   .print "src: \rsrc dst: \rdst"
+   
+   // rdst is always r0
+   // rsrc is r4 r3 or r11
+   mov r1, \rdst
+   mov r0, \rsrc
+
+   // r0 = data r1 = address
    blx   io_write
-   pop   {r2,r3}
-   ldr   r1,=IO_REGS>>3
-   mov   tregs,r1
+   pop   {r0-r3}
+   
+   
    NEXT_INSTRUCTION 2 noalign
 1:
+   pop   {r2-r3}
 .ifc \rsrc,rXreg
    mov   r1,rXreg
    strb  r1,[ rmem, \rdst ]
 .else
-   @blx mem_store
    strb  \rsrc,[ rmem, \rdst ]
 .endif
    NEXT_INSTRUCTION 2
@@ -893,23 +940,23 @@ l_2a: // Opcode 2A - ROL A
    ROL6 0 rAcc
 
 l_2b:
-   @ NOP 1
-   BL l_ea
-bitjumpload:
-   push  {r3}
-   blx   io_read
-   pop   {r3}
-   ldr   r1,=IO_REGS>>3
-   mov   tregs, r1
-   BIT 2
+   NOP 1
+@    BL l_ea
+@ bitjumpload:
+@    push  {r3}
+@    blx   io_read
+@    pop   {r3}
+@    ldr   r1,=IO_REGS>>4
+@    mov   tregs, r1
+@    BIT 2
 
 l_2c: // Opcode 2C - BIT $0000
-   GET_ABS_LOCATION r0
+   GET_ABS_LOCATION r1
    // Check for IO access
-   LSR   r1, r0, #3
-   cmp   r1, tregs   // need to compare with IO_REGS>>3
-   beq   bitjumpload
-   LOAD_BYTE r0, r0
+   @ LSR   r1, r0, #4
+   @ cmp   r1, tregs   // need to compare with IO_REGS>>3
+   @ beq   bitjumpload
+   LOAD_BYTE r0, r1
    BIT 2
 
 l_2d: // Opcode 2D - AND $0000
@@ -1457,17 +1504,17 @@ l_ab: // Opcode ab - NOP
    NOP 0
 
 l_ac: // Opcode AC - LDY $0000
-   LOAD_ABS_IO rYreg
+   LOAD_ABS rYreg
    SET_FLAGS_NZ rYreg
    NEXT_INSTRUCTION 2
 
 l_ad: // Opcode AD - LDA $0000
-   LOAD_ABS_IO rAcc
+   LOAD_ABS rAcc
    SET_FLAGS_NZ
    NEXT_INSTRUCTION 2
 
 l_ae: // Opcode AE - LDX $0000
-   LOAD_ABS_IO r0
+   LOAD_ABS r0
    mov  rXreg, r0
    SET_FLAGS_NZ r0
    NEXT_INSTRUCTION 2
@@ -2355,7 +2402,7 @@ exec_65:
    ldr  r2,=(l_00)+1
    mov  insttable, r2
 
-   ldr   r0, =IO_REGS>>3
+   ldr   r0, =IO_REGS>>4
    mov   tregs, r0
 
    mov   rflagsNZ,#0  // Clear N and Z flag

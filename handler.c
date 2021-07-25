@@ -32,13 +32,13 @@
 #define VIA2_PCR    (VIA2_BASE + 0xC)
 #define VIA2_IFR    (VIA2_BASE + 0xD)
 #define VIA2_IER    (VIA2_BASE + 0xE)
+#define VIA2_PORTA2    (VIA2_BASE + 0xF)
 
 //extern uint32_t ticks;
 
 uint64_t ticks = 0;
 
 unsigned char mpu_memory[64*1024];
-
 
 
 inline void _disable_interrupts()
@@ -79,24 +79,80 @@ const uint8_t rgb8[] = {
 absolute_time_t gotchar;
 absolute_time_t lastgotchar;
 
+
+extern uint8_t io_read( uint16_t address) {
+   if (address == VIA2_PORTA2) {
+      address = VIA2_PORTA;
+   }
+   if (address == VIA2_PORTB || address == VIA2_PORTA) {
+      return 0;
+   }
+   if (address == VIA2_T1CL) {
+      // Clear interrupt
+      tube_irq &= ~IRQ_BIT;
+      mpu_memory[VIA2_IFR] = 0x00;
+      printf("timer int cleared by read\n");
+   }
+
+   printf("read address %04X\n", address);
+   
+   return mpu_memory[address];
+}
+extern void io_write( uint8_t data, uint16_t address) {
+   if (address == VIA2_PORTB || address == VIA2_PORTA) {
+      return;
+   }
+   
+   printf("write address: %04X data: %02X\n", address, data);
+   if (address == VIA2_T1CH || address == VIA2_T1LH || address == VIA2_IFR) {
+      // Clear interrupt
+      tube_irq &= ~IRQ_BIT;
+      mpu_memory[VIA2_IFR] = 0x00;
+      printf("timer int cleared by write\n");
+
+      mpu_memory[address] = data;
+   } else if (address == VIA2_IER) {
+      if (data & 0x80) {
+         // set the bits that are set
+         mpu_memory[VIA2_IER] |= data & 0x7F;
+      } else {
+         // unset the bits that are set
+         mpu_memory[VIA2_IER] &= ~(data & 0x7F);
+         if (data & 0x40) {
+            // T1 interrupt enable bit reset, clear interrupt
+            tube_irq &= ~IRQ_BIT;
+            mpu_memory[VIA2_IFR] = 0x00;
+            printf("timer int cleared by IER write\n");
+         }
+      }
+   }
+}
+
 extern void callback(uint8_t inst)
 {
    ticks += inst; //timing_table[inst];
 
    gotchar = get_absolute_time();
-   if (absolute_time_diff_us(lastgotchar, gotchar) > 16000) {
-      // tube_irq |= IRQ_BIT;
-
-      mpu_memory[VIA2_IFR] = 0xC0;
-      // Update elapsed time
-      uint time = mpu_memory[0xA0] << 16 | mpu_memory[0xA1] << 8 | mpu_memory[0xA2];
-      time++;
-      if (time >= 0x4F1A01) {
-         time = 0;
+   if (absolute_time_diff_us(lastgotchar, gotchar) > 320000) {
+      mpu_memory[VIA2_T1CH] = 0;
+      mpu_memory[VIA2_T1CL] = 0;
+      if (mpu_memory[VIA2_IER] & 0x40) {
+         printf("timer int\n");
+         tube_irq |= IRQ_BIT;
+         mpu_memory[VIA2_IFR] = 0xC0;
       }
-      mpu_memory[0xA0] = (time >> 16) & 0xFF;
-      mpu_memory[0xA1] = (time >> 8) & 0xFF;
-      mpu_memory[0xA2] = (time) & 0xFF;
+
+      // // Update elapsed time
+      uint time = mpu_memory[0xA0] << 16 | mpu_memory[0xA1] << 8 | mpu_memory[0xA2];
+
+      printf("time: %ld\n", time);
+      // time++;
+      // if (time >= 0x4F1A01) {
+      //    time = 0;
+      // }
+      // mpu_memory[0xA0] = (time >> 16) & 0xFF;
+      // mpu_memory[0xA1] = (time >> 8) & 0xFF;
+      // mpu_memory[0xA2] = (time) & 0xFF;
       
       //Get characters from serial
       lastgotchar = gotchar;
@@ -163,41 +219,10 @@ extern void callback(uint8_t inst)
                *b++ = rgb8[c & 0x07];
             }
          }
-
-         
-         
       }
    }
-   
-
-   // if (ticks  % 10000000 == 0) {
-   //    absolute_time_t now = get_absolute_time();
-   //    int64_t elapsed = absolute_time_diff_us(start, now);
-
-   //    float khz = (float)ticks / (float)elapsed;
-
-   //    printf("test %ld after %ld ticks speed is %.2f MHz\n", mpu_memory[0x202], ticks, khz);
-   // }
 }
 
-extern uint8_t io_read( uint16_t address) {
-   //if ((address >> 9) == 0x48) {
-      printf("read address: %04X\n", address);
-   //}
-
-   if (address == VIA2_T1CL || address == VIA2_T1LL) {
-      // Clear interrupt
-      tube_irq &= ~IRQ_BIT;
-      mpu_memory[VIA2_IFR] = 0x00;
-   }
-   
-   return mpu_memory[address];
-}
-extern void io_write( uint8_t data, uint16_t address) {
-   if ((address >> 9) == 0x48) {
-      printf("write address: %04X data: %02X\n", address, data);
-   }
-}
 
 unsigned char * mem_reset(int length)
 {
