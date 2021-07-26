@@ -24,6 +24,7 @@
 #include "basic.h"
 #include "char_rom.h"
 
+
 // If this is active, then an overclock will be applied
 #define OVERCLOCK
 // Comment this to run your own ROM
@@ -69,7 +70,7 @@ int main() {
 
 
     start = get_absolute_time();
-
+    tube_irq |= TUBE_ENABLE_BIT;
     tube_irq &= ~(RESET_BIT + NMI_BIT + IRQ_BIT);
 
    unsigned char * mpu_memory; // now the arm vectors have moved we can set the core memory to start at 0
