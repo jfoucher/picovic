@@ -1,4 +1,6 @@
 // copro-65tube.h
+#ifndef HANDLER_H_
+#define HANDLER_H_
 #include "vic.h"
 
 
@@ -11,11 +13,7 @@
 #define IRQ_BIT     1
 
 
-uint8_t pxbuf[_VIC20_STD_DISPLAY_WIDTH * _VIC20_STD_DISPLAY_HEIGHT];
-
-absolute_time_t start;
-
-volatile int tube_irq;
+extern uint8_t pxbuf[_VIC20_STD_DISPLAY_WIDTH * _VIC20_STD_DISPLAY_HEIGHT];
 
 
 extern unsigned char * mem_reset();
@@ -27,3 +25,4 @@ extern void memory_read( uint16_t address);
 extern void callback(uint8_t inst);
 
 
+#endif
