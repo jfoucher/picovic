@@ -19,12 +19,26 @@
 #define CHAR_BUFFER_ADDRESS 0x277
 #define CHAR_BUFFER_NUM_ADDRESS 0xC6
 
+#define VIA2_BASE (0x9120)
+#define VIA2_PORTB  (VIA2_BASE)
+#define VIA2_PORTA  (VIA2_BASE+1)
+#define VIA2_DDRB   (VIA2_BASE+2)
+#define VIA2_DDRA   (VIA2_BASE+3)
+#define VIA2_T1CL   (VIA2_BASE + 4)
+#define VIA2_T1CH   (VIA2_BASE + 5)
+#define VIA2_T1LL   (VIA2_BASE + 6)
+#define VIA2_T1LH   (VIA2_BASE + 7)
+#define VIA2_ACR    (VIA2_BASE + 0xB)
+#define VIA2_PCR    (VIA2_BASE + 0xC)
+#define VIA2_IFR    (VIA2_BASE + 0xD)
+#define VIA2_IER    (VIA2_BASE + 0xE)
+#define VIA2_PORTA2    (VIA2_BASE + 0xF)
+
 //extern uint32_t ticks;
 
 uint64_t ticks = 0;
 
 unsigned char mpu_memory[64*1024];
-
 
 
 inline void _disable_interrupts()
@@ -64,23 +78,91 @@ const uint8_t rgb8[] = {
 
 absolute_time_t gotchar;
 absolute_time_t lastgotchar;
+bool timer_started = false;
+
+extern uint8_t io_read( uint16_t address) {
+   printf("read address %04X\n", address);
+   if (address == VIA2_PORTA2) {
+      address = VIA2_PORTA;
+   }
+   if (address == VIA2_T1CL && mpu_memory[VIA2_IFR]) {
+      // Clear interrupt
+      tube_irq &= ~IRQ_BIT;
+      mpu_memory[VIA2_IFR] = 0x00;
+      printf("timer int cleared by read\n");
+   }
+
+   return mpu_memory[address];
+}
+
+extern void io_write( uint8_t data, uint16_t address) {
+   data &= 0xff;
+   printf("write address: %04X data: %02X\n", address, data);
+
+   if (mpu_memory[VIA2_IFR] && (address == VIA2_T1CH || address == VIA2_IFR)) {
+      // Clear interrupt
+      tube_irq &= ~IRQ_BIT;
+      mpu_memory[VIA2_IFR] = 0x00;
+      printf("timer int cleared by write\n");
+      timer_started = true;
+   } else if (address == VIA2_IER) {
+      if (data & 0x80) {
+         // set the bits that are set
+         mpu_memory[VIA2_IER] |= data & 0x7F;
+      } else {
+         // unset the bits that are set
+         mpu_memory[VIA2_IER] &= ~data & 0x7F;
+         if (data & 0x40) {
+            // T1 interrupt enable bit reset, clear interrupt
+            tube_irq &= ~IRQ_BIT;
+            mpu_memory[VIA2_IFR] = 0x00;
+            printf("timer int cleared by IER write\n");
+         }
+      }
+      return;
+   }else if (address == VIA2_ACR) {
+      if (data & 0x40) {
+         timer_started = true;
+      }
+   }
+   mpu_memory[address] = data & 0xFF;
+}
+
+extern void interrupted(uint8_t val) {
+   printf("interrupted %02X\n", val);
+}
 
 extern void callback(uint8_t inst)
 {
    ticks += inst; //timing_table[inst];
 
    gotchar = get_absolute_time();
-   if (absolute_time_diff_us(lastgotchar, gotchar) > 16000) {
+   if (absolute_time_diff_us(lastgotchar, gotchar) > 320000) {
+      mpu_memory[VIA2_T1CH] = 0;
+      mpu_memory[VIA2_T1CL] = 0;
+      if ((mpu_memory[VIA2_IER] & 0x40) && timer_started) {
+         tube_irq |= IRQ_BIT;
+         printf("timer int %02X\n", tube_irq);
+         mpu_memory[VIA2_IFR] = 0xC0;
+         if ((mpu_memory[VIA2_ACR] & 0x40) == 0) {
+            // single shot timer
+            timer_started = false;
+         }
+      }
+
+      //printf("IRQVEC: %02X, %02X, %02X", mpu_memory[0x0314], mpu_memory[0x315], mpu_memory[0x0316]);
 
       // Update elapsed time
       uint time = mpu_memory[0xA0] << 16 | mpu_memory[0xA1] << 8 | mpu_memory[0xA2];
-      time++;
-      if (time >= 0x4F1A01) {
-         time = 0;
-      }
-      mpu_memory[0xA0] = (time >> 16) & 0xFF;
-      mpu_memory[0xA1] = (time >> 8) & 0xFF;
-      mpu_memory[0xA2] = (time) & 0xFF;
+
+      printf("time: %ld\n", time);
+      // time++;
+      // if (time >= 0x4F1A01) {
+      //    time = 0;
+      // }
+      // mpu_memory[0xA0] = (time >> 16) & 0xFF;
+      // mpu_memory[0xA1] = (time >> 8) & 0xFF;
+      // mpu_memory[0xA2] = (time) & 0xFF;
       
       //Get characters from serial
       lastgotchar = gotchar;
@@ -94,6 +176,8 @@ extern void callback(uint8_t inst)
          if ((chr & 0xFF) == 3) {
             chr = 23;
          }
+         unsigned char s[] = {(uint8_t) (chr & 0xFF), 0};
+         printf("%s", &s);
 
          mpu_memory[CHAR_BUFFER_ADDRESS + nb_chars] = (uint8_t) (chr & 0xFF);
          mpu_memory[CHAR_BUFFER_NUM_ADDRESS] = nb_chars + 1;
@@ -147,21 +231,8 @@ extern void callback(uint8_t inst)
                *b++ = rgb8[c & 0x07];
             }
          }
-
-         
-         
       }
    }
-   
-
-   // if (ticks  % 10000000 == 0) {
-   //    absolute_time_t now = get_absolute_time();
-   //    int64_t elapsed = absolute_time_diff_us(start, now);
-
-   //    float khz = (float)ticks / (float)elapsed;
-
-   //    printf("test %ld after %ld ticks speed is %.2f MHz\n", mpu_memory[0x202], ticks, khz);
-   // }
 }
 
 
