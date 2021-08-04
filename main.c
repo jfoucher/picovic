@@ -42,6 +42,12 @@ volatile int tube_irq;
 void core1_func();
 static semaphore_t video_initted;
 
+absolute_time_t start;
+
+volatile int tube_irq;
+
+uint8_t pxbuf[_VIC20_STD_DISPLAY_WIDTH * _VIC20_STD_DISPLAY_HEIGHT];
+
 void push_audio() {
 
 };

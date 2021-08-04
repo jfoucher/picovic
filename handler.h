@@ -15,6 +15,11 @@
 
 extern uint8_t pxbuf[_VIC20_STD_DISPLAY_WIDTH * _VIC20_STD_DISPLAY_HEIGHT];
 
+extern absolute_time_t start;
+
+extern volatile int tube_irq;
+
+
 
 extern unsigned char * mem_reset();
 
