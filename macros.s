@@ -89,15 +89,15 @@
 // r1 is rPbyteLo
 .macro CHECK_IRQ
    // check for external IRQ
-@    LDR   r0,=tube_irq
-@    LDRb  r0,[r0]
-@    LSR   r0,r0,#1
-@    BCC   1f
-@    // check if 6502 IRQs enabled
-@    LSR   r1,r1, #3  // bit 2 =0 means enabled
-@    BCS   1f
-@    BL    handleinterrupt
-@ 1:
+   @ ldr   r0,=tube_irq
+   @ ldrb  r0,[r0]
+   @ lsr   r0,r0,#1
+   @ bcc   1f
+   @ // check if 6502 IRQs enabled
+   @ lsr   r1,r1, #3  // bit 2 =0 means enabled
+   @ bcs   1f
+   @ INTR 2
+1:
    NEXT_INSTRUCTION 0
 .endm
 
@@ -319,13 +319,14 @@
    pop   {r2-r3}
    push  {r0-r3}
 
-   
-
-   // rdst is always r1
+   // rdst is  r1 or R0 for ABS
    // rsrc can be r0, r3, r4
 
    // rdst should go in r1
    // rsrc should go in r0
+   .ifnc r1, \rdst
+      mov r1, \rdst
+   .endif
    .ifnc r0, \rsrc
       mov r0, \rsrc
    .endif
@@ -333,46 +334,21 @@
    blx   io_write
    pop   {r0-r3}
    
-   b 2f
-1:
-   pop   {r2-r3}
-   strb    \rsrc,[ rmem, \rdst ]
-2:
-   NEXT_INSTRUCTION \inc
-.endm
-
-.macro STORE_BYTE_ABS rsrc rdst
-   push  {r2-r3}
-   LSR   r2, \rdst, #4
-   ldr   r3,=IO_REGS>>4
-   mov   tregs,r3
-   CMP   r2, tregs
-   bne   1f
-   pop   {r2-r3}
-   push  {r0-r3}
-   .print "src: \rsrc dst: \rdst"
-   
-   // rdst is always r0
-   // rsrc is r4 r3 or r11
-   mov r1, \rdst
-   mov r0, \rsrc
-
-   // r0 = data r1 = address
-   blx   io_write
-   pop   {r0-r3}
-   
-   
-   NEXT_INSTRUCTION 2 noalign
+   NEXT_INSTRUCTION \inc noalign
 1:
    pop   {r2-r3}
 .ifc \rsrc,rXreg
+   push {r1}
    mov   r1,rXreg
    strb  r1,[ rmem, \rdst ]
+   pop {r1}
 .else
    strb  \rsrc,[ rmem, \rdst ]
 .endif
-   NEXT_INSTRUCTION 2
+   
+   NEXT_INSTRUCTION \inc
 .endm
+
 
 /* branches */
 .macro BRANCH condition inc=0 zero=nozero
@@ -397,14 +373,14 @@
    strb  rPC, [r0, #2]           @ store low byte of pc into stack
    LSR   rPC, rPC,#8             @ shift pc right by 8 to get high byte
    strb  rPC, [r0, #3]           @ store high byte of pc into stack pointer
-   @mov   rPC, r0                 @ rPC now becomes the stack pointer ?
+   mov   rPC, r0                 @ rPC now becomes the stack pointer ?
    @ push pByte in 6502 format
    statustoR rPC \bflag
    @statustoR r0 \bflag             @ put status register into r0
 
    strb  rPC, [r0,#1]            @ store status register in stack
 
-   @ mov   r1, rPbyteLo
+   mov   r1, rPbyteLo
    mov   r0, #pByteIflag         @ BRK sets interrupt disable just as IRQ would
    orr   r1, r0
    mov   r0, #pByteDflag
@@ -413,7 +389,8 @@
 
    ldr   rPC, =0x10000-\vector   @ put the vector into PC
    ldrh  rPC, [rPC, rmem]        @ put address at vector into PC // vectors are aligned so we can use ldrh
-   push {r0-r3}
+
+   @ push {r0-r3}
    add   rPC, rmem               @ add the base address to it
 .endm
 

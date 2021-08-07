@@ -111,14 +111,16 @@ int main() {
 
     */
 
-    for (int i = 0xE000; i < 0x10000; i++) {
-        mpu_memory[i] = kernal[i-0xE000];
+    
+    
+    for (int i = 0x8000; i < 0x9000; i++) {
+        mpu_memory[i] = characters[i-0x8000];
     }
     for (int i = 0xC000; i < 0xE000; i++) {
         mpu_memory[i] = basic[i-0xC000];
     }
-    for (int i = 0x8000; i < 0x9000; i++) {
-        mpu_memory[i] = characters[i-0x8000];
+    for (int i = 0xE000; i < 0x10000; i++) {
+        mpu_memory[i] = kernal[i-0xE000];
     }
 
     vic_init(pxbuf);

@@ -81,7 +81,7 @@ absolute_time_t lastgotchar;
 bool timer_started = false;
 
 extern uint8_t io_read( uint16_t address) {
-   printf("read address %04X\n", address);
+   //printf("read address %04X ", address);
    if (address == VIA2_PORTA2) {
       address = VIA2_PORTA;
    }
@@ -89,23 +89,27 @@ extern uint8_t io_read( uint16_t address) {
       // Clear interrupt
       tube_irq &= ~IRQ_BIT;
       mpu_memory[VIA2_IFR] = 0x00;
-      printf("timer int cleared by read\n");
+      //printf("timer int cleared by read\n");
    }
+
+   //printf("data is %02X\n", mpu_memory[address]);
+
 
    return mpu_memory[address];
 }
 
 extern void io_write( uint8_t data, uint16_t address) {
-   data &= 0xff;
-   printf("write address: %04X data: %02X\n", address, data);
+   data = data & 0xFF;
+   //printf("write address: %04X data: %02X\n", address, data);
 
-   if (mpu_memory[VIA2_IFR] && (address == VIA2_T1CH || address == VIA2_IFR)) {
-      // Clear interrupt
-      tube_irq &= ~IRQ_BIT;
-      mpu_memory[VIA2_IFR] = 0x00;
-      printf("timer int cleared by write\n");
-      timer_started = true;
-   } else if (address == VIA2_IER) {
+   // if (mpu_memory[VIA2_IFR] && (address == VIA2_T1CH || address == VIA2_IFR)) {
+   //    // Clear interrupt
+   //    tube_irq &= ~IRQ_BIT;
+   //    mpu_memory[VIA2_IFR] = 0x00;
+   //    printf("timer int cleared by write\n");
+   //    timer_started = true;
+   // } else 
+   if (address == VIA2_IER) {
       if (data & 0x80) {
          // set the bits that are set
          mpu_memory[VIA2_IER] |= data & 0x7F;
@@ -116,11 +120,12 @@ extern void io_write( uint8_t data, uint16_t address) {
             // T1 interrupt enable bit reset, clear interrupt
             tube_irq &= ~IRQ_BIT;
             mpu_memory[VIA2_IFR] = 0x00;
-            printf("timer int cleared by IER write\n");
+            //printf("timer int cleared by IER write\n");
          }
       }
       return;
-   }else if (address == VIA2_ACR) {
+   } 
+   else if (address == VIA2_ACR) {
       if (data & 0x40) {
          timer_started = true;
       }
@@ -129,7 +134,7 @@ extern void io_write( uint8_t data, uint16_t address) {
 }
 
 extern void interrupted(uint8_t val) {
-   printf("interrupted %02X\n", val);
+   //printf("interrupted %02X\n", val);
 }
 
 extern void callback(uint8_t inst)
@@ -137,12 +142,13 @@ extern void callback(uint8_t inst)
    ticks += inst; //timing_table[inst];
 
    gotchar = get_absolute_time();
-   if (absolute_time_diff_us(lastgotchar, gotchar) > 320000) {
+   if (absolute_time_diff_us(lastgotchar, gotchar) > 160000) {
       mpu_memory[VIA2_T1CH] = 0;
       mpu_memory[VIA2_T1CL] = 0;
       if ((mpu_memory[VIA2_IER] & 0x40) && timer_started) {
          tube_irq |= IRQ_BIT;
-         printf("timer int %02X\n", tube_irq);
+
+         //printf("timer int %02X\n", tube_irq);
          mpu_memory[VIA2_IFR] = 0xC0;
          if ((mpu_memory[VIA2_ACR] & 0x40) == 0) {
             // single shot timer

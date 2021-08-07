@@ -715,15 +715,15 @@ l_8b: // Opcode 8B - NOP
 
 l_8c: // Opcode 8C - STY $0000
    GET_ABS_LOCATION r0
-   STORE_BYTE_ABS rYreg r0
+   STORE_BYTE 2 rYreg r0
 
 l_8d: // Opcode 8D - STA $0000
    GET_ABS_LOCATION r0
-   STORE_BYTE_ABS rAcc r0
+   STORE_BYTE 2 rAcc r0
 
 l_8e: // Opcode 8E - STX $0000
    GET_ABS_LOCATION r0
-   STORE_BYTE_ABS rXreg r0
+   STORE_BYTE 2 rXreg r0
 
 l_8f: // Opcode 8F - BBS0
    BBS 0
@@ -1778,21 +1778,32 @@ trace6502code:
    // check irqs
    mov   r0,rPbyteLo
    lsr   r0,r0,#3                   // check if 6502 IRQs are enabled
-   BCS   handle_nextinstruction     // If set interrupt disabled bit is 1, no interrupts
-   LDR   r0,=tube_irq
-   LDRb  r0,[r0]
-   LSR   r0,r0,#1
-   BCC   handle_nextinstruction
-   @ pop {r0-r3}
-   
-handleinterrupt:
-   INTR 2
-   @ b handle_nextinstruction2
-   @ blx interrupted
+   bcs   handle_nextinstruction     // If set interrupt disabled bit is 1, no interrupts
+   ldr   r0,=tube_irq
+   ldrb  r0,[r0]
+   lsr   r0,r0,#1                   @ if the irq bit is set
+   bcs   handleinterrupt            @ handle IRQ
+
 handle_nextinstruction:
    pop {r0-r3}                      // restore original registers
 handle_nextinstruction2:
+   LSL   r0, #I_ALIGN_BITS
+   add   r0, r0, insttable
+   bx    r0
 
+handleinterrupt:
+
+   @ bl interrupted
+   pop {r0-r3} 
+   INTR 2
+   push    {r0-r3}  @ could be clobbered
+   mov     r0, rPC
+   sub     r0,r0,rmem
+   bl     printhex16
+   bl    printspace
+   pop     {r0-r3}
+   ldrb  r0, [rPC]
+   add   rPC, #1
    LSL   r0, #I_ALIGN_BITS
    add   r0, r0, insttable
    bx    r0
@@ -1876,43 +1887,43 @@ handle_nextinstruction2:
 @    add   r0, r0,insttable
 @    bx    r0
 
-@ printhex16:
-@    push {r0-r1,r14}
-@    mov r1,r0
-@    LSR r0,#8
-@    bl printhex8
-@    mov r0,r1
-@    bl printhex8
-@    pop  {r0-r1,pc}
+printhex16:
+   push {r0-r1,r14}
+   mov r1,r0
+   LSR r0,#8
+   bl printhex8
+   mov r0,r1
+   bl printhex8
+   pop  {r0-r1,pc}
 
-@ printhex8:
-@    push {r0-r1,r14}
-@    mov r1,r0
-@    lsr r0,#4
-@    bl  printnibble
-@    mov r0,r1
-@    bl  printnibble
-@    pop {r0-r1,pc}
+printhex8:
+   push {r0-r1,r14}
+   mov r1,r0
+   lsr r0,#4
+   bl  printnibble
+   mov r0,r1
+   bl  printnibble
+   pop {r0-r1,pc}
 
-@ printnibble:
-@    push {r0-r3,r14}
-@    lsl  r0,r0,#28
-@    lsr r0,r0,#28 // clear upper bits
-@    CMP r0, #10
-@    blt nibble_less_than_10
-@    mov r1,#'a'-'0'-10
-@    add r0,r1
-@ nibble_less_than_10:
-@    mov r1,#'0'
-@    add r0,r1
-@    BL putchar
-@    pop {r0-r3,pc}
+printnibble:
+   push {r0-r3,r14}
+   lsl  r0,r0,#28
+   lsr r0,r0,#28 // clear upper bits
+   CMP r0, #10
+   blt nibble_less_than_10
+   mov r1,#'a'-'0'-10
+   add r0,r1
+nibble_less_than_10:
+   mov r1,#'0'
+   add r0,r1
+   BL putchar
+   pop {r0-r3,pc}
 
-@ printspace:
-@    push {r14}
-@    mov r0,#32
-@    BL putchar
-@    pop {pc}
+printspace:
+   push {r14}
+   mov r0,#32
+   BL putchar
+   pop {pc}
 
 
 .ltorg
