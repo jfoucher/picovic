@@ -23,16 +23,20 @@
 #include "kernal.h"
 #include "basic.h"
 #include "char_rom.h"
+#include "ps2.pio.h"
+#include "ps2/ps2.h"
 
 #define CHAR_BUFFER_ADDRESS 0x277
 #define CHAR_BUFFER_NUM_ADDRESS 0xC6
 // If this is active, then an overclock will be applied
 #define OVERCLOCK
 // Comment this to run your own ROM
-#define TESTING
+//#define TESTING
 
 // Delay startup by so many seconds
-#define START_DELAY 6
+//#define START_DELAY 6
+
+#define PS2_INPUT_PIN_BASE 16
 
 #define VIA2_BASE (0x9120)
 #define VIA2_PORTB  (VIA2_BASE)
@@ -101,6 +105,7 @@ void push_audio() {
 
 absolute_time_t start;
 bool running = true;
+bool runstop_pressed = false;
 
 uint8_t read6502(uint16_t address) {
     if (address == VIA2_PORTA2) {
@@ -110,9 +115,9 @@ uint8_t read6502(uint16_t address) {
       mpu_memory[VIA2_IFR] = 0x00;
     //   printf("timer int cleared by T1CL read\n");
     }
-    if (address == VIA2_PORTB || address == VIA2_PORTA) {
-        return 0;
-    }
+    // if (address == VIA2_PORTB || address == VIA2_PORTA) {
+    //     return 0;
+    // }
     return mpu_memory[address];
 }
 
@@ -131,7 +136,14 @@ void write6502(uint16_t address, uint8_t data) {
         // printf("timer int cleared by IFR write\n");
         // timer_started = true;
         return;
-    } 
+    } else if (address == VIA2_PORTB) {
+        // printf("writing %02X to portB\n", data);
+        if (runstop_pressed && data == 0xF7) {
+            mpu_memory[VIA2_PORTA] = 0xFE;
+        } else {
+            mpu_memory[VIA2_PORTA] = 0;
+        }
+    }
     else if (address == VIA2_IER) {
         if ((data & 0x80) == 0x80) {
             // set the bits that are set
@@ -178,12 +190,12 @@ void callback() {
 
         
 
-        cnt++;
-        if (cnt % 120 == 0) {
-            uint64_t elapsed = absolute_time_diff_us(start, gotchar);
-            float mhz = (float) clockticks6502 / (float) elapsed;
-            printf("speed: %.3f\n", mhz);
-        }
+        // cnt++;
+        // if (cnt % 120 == 0) {
+        //     uint64_t elapsed = absolute_time_diff_us(start, gotchar);
+        //     float mhz = (float) clockticks6502 / (float) elapsed;
+        //     printf("speed: %.3f\n", mhz);
+        // }
         
 
             //printf("timer int %02X\n", tube_irq);
@@ -196,22 +208,22 @@ void callback() {
 
 
         lastgotchar = gotchar;
-        int chr = getchar_timeout_us(0);
-        if (chr != PICO_ERROR_TIMEOUT) {
-            // POke character in memory
-            uint8_t nb_chars = mpu_memory[CHAR_BUFFER_NUM_ADDRESS];
-            if (chr > 0x60) {
-                chr = chr-0x20;
-            }
-            if ((chr & 0xFF) == 3) {
-                chr = 23;
-            }
-            unsigned char s[] = {(uint8_t) (chr & 0xFF), 0};
-            printf("%s", &s);
+        // int chr = getchar_timeout_us(0);
+        // if (chr != PICO_ERROR_TIMEOUT) {
+        //     // POke character in memory
+        //     uint8_t nb_chars = mpu_memory[CHAR_BUFFER_NUM_ADDRESS];
+        //     if (chr > 0x60) {
+        //         chr = chr-0x20;
+        //     }
+        //     if ((chr & 0xFF) == 3) {
+        //         chr = 23;
+        //     }
+        //     unsigned char s[] = {(uint8_t) (chr & 0xFF), 0};
+        //     printf("%s", &s);
 
-            mpu_memory[CHAR_BUFFER_ADDRESS + nb_chars] = (uint8_t) (chr & 0xFF);
-            mpu_memory[CHAR_BUFFER_NUM_ADDRESS] = nb_chars + 1;
-        }
+        //     mpu_memory[CHAR_BUFFER_ADDRESS + nb_chars] = (uint8_t) (chr & 0xFF);
+        //     mpu_memory[CHAR_BUFFER_NUM_ADDRESS] = nb_chars + 1;
+        // }
 
         //Fill framebuffer
         uint8_t *b = (uint8_t *) pxbuf;
@@ -264,6 +276,10 @@ void callback() {
         }
     }
 }
+
+bool ignoreNext = false;
+bool shifted = false;
+bool ctrl = false;
 
 int main() {
 #ifdef OVERCLOCK
@@ -333,12 +349,73 @@ int main() {
     gotchar = get_absolute_time();
     lastgotchar = get_absolute_time();
 
+    const uint LED_PIN = PICO_DEFAULT_LED_PIN;
+    gpio_init(LED_PIN);
+    gpio_set_dir(LED_PIN, GPIO_OUT);
+    gpio_put(LED_PIN, 1);
+
+    initkb();
+
+    // Load the ps2 program, and configure a free state machine
+    // to run the program.
+    PIO pio = pio1;
+    uint offset = pio_add_program(pio, &ps2_input_program);
+    uint sm = pio_claim_unused_sm(pio, true);
+    ps2_input_program_init(pio, sm, offset, PS2_INPUT_PIN_BASE);
+
+    
     reset6502();
 
     //hookexternal(callback);
 
     while(1) {
         callback();
+        
+        if (pio_sm_get_rx_fifo_level(pio, sm) > 0) {
+            uint32_t rxdata = pio_sm_get_blocking(pio, sm);
+            uint8_t charcode = ( rxdata >> 22) & 0xFF;
+            printf("%02X\n", charcode);
+            
+            if (charcode == 0xAA) {
+                printf("got AA from kb");
+            } else if (charcode == 0xF0) {
+                // break code
+                ignoreNext = true;
+            } else if (charcode == 0x76 && !ignoreNext) {
+                // break code
+                runstop_pressed = true;
+            } else if ((charcode == 0x12 || charcode == 0x59) && !ignoreNext) {
+                // shift code
+                shifted = true;
+            } else if (!ignoreNext) {
+                uint8_t chr = keymap_US[charcode];
+                if (shifted) {
+                    chr = keymap_US[charcode + 132];
+                }
+                
+                uint8_t nb_chars = mpu_memory[CHAR_BUFFER_NUM_ADDRESS];
+                if (chr > 0x60) {
+                    chr = chr-0x20;
+                }
+                if ((chr & 0xFF) == 3) {
+                    chr = 23;
+                }
+
+                mpu_memory[CHAR_BUFFER_ADDRESS + nb_chars] = (uint8_t) (chr & 0xFF);
+                mpu_memory[CHAR_BUFFER_NUM_ADDRESS] = nb_chars + 1;
+            } else if (ignoreNext) {
+                ignoreNext = false;
+
+                if (charcode == 0x12 || charcode == 0x59) {
+                    // shift code stop
+                    shifted = false;
+                } else if (charcode == 0x76) {
+                    runstop_pressed = false;
+                }
+            }
+        }
+        
+
         step6502();  
     }
 

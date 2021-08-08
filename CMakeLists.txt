@@ -41,6 +41,7 @@ target_link_libraries(picovic2 pico_stdlib hardware_timer hardware_vreg pico_mul
 
 pico_generate_pio_header(picovic2 ${CMAKE_CURRENT_LIST_DIR}/scanvideo/scanvideo.pio)
 pico_generate_pio_header(picovic2 ${CMAKE_CURRENT_LIST_DIR}/scanvideo/timing.pio)
+pico_generate_pio_header(picovic2 ${CMAKE_CURRENT_LIST_DIR}/ps2/ps2.pio)
 
 # enable usb output, disable uart output
 pico_enable_stdio_usb(picovic2 1)
