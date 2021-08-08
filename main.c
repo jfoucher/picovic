@@ -111,7 +111,7 @@ absolute_time_t start;
 bool running = true;
 bool runstop_pressed = false;
 
-uint8_t read6502(uint16_t address) {
+uint8_t __time_critical_func(read6502)(uint16_t address) {
     if (address == VIA2_PORTA2) {
         address = VIA2_PORTA;
     }
@@ -125,7 +125,7 @@ uint8_t read6502(uint16_t address) {
     return mpu_memory[address];
 }
 
-void write6502(uint16_t address, uint8_t data) {
+void __time_critical_func(write6502)(uint16_t address, uint8_t data) {
     if (mpu_memory[VIA2_IFR] && address == VIA2_T1CH) {
         // Clear interrupt
         mpu_memory[VIA2_IFR] &= ~0xC0;
@@ -169,7 +169,7 @@ void write6502(uint16_t address, uint8_t data) {
 uint cnt = 0;
 bool vblank_entered = false;
 
-void callback() {
+static void __time_critical_func(callback)() {
     // gotchar = get_absolute_time();
     if (scanvideo_in_vblank() && vblank_entered == false) {
         vblank_entered = true;

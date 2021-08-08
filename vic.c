@@ -25,7 +25,7 @@ void vic_get_screen_sz(uint16_t *width, uint16_t *height)
 }
 
 
-void vic_draw_color_bar(scanvideo_scanline_buffer_t *buffer) {
+void __time_critical_func(vic_draw_color_bar)(scanvideo_scanline_buffer_t *buffer) {
     uint line_num = scanvideo_scanline_number(buffer->scanline_id);
     uint line_index = (line_num * _VIC20_STD_DISPLAY_HEIGHT) / vga_mode.height;
     uint16_t *p = (uint16_t *) buffer->data;
