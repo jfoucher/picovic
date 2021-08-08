@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 #include "scanvideo/scanvideo.h"
+#include "scanvideo/scanvideo_base.h"
+
 #include "scanvideo/composable_scanline.h"
 #include "pico/multicore.h"
 #include "pico/sync.h"

@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT 64
+
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "hardware/clocks.h"
@@ -25,6 +27,8 @@
 #include "char_rom.h"
 #include "ps2.pio.h"
 #include "ps2/ps2.h"
+
+
 
 #define CHAR_BUFFER_ADDRESS 0x277
 #define CHAR_BUFFER_NUM_ADDRESS 0xC6
@@ -163,42 +167,13 @@ void write6502(uint16_t address, uint8_t data) {
 }
 
 uint cnt = 0;
+bool vblank_entered = false;
 
 void callback() {
+    // gotchar = get_absolute_time();
+    if (scanvideo_in_vblank() && vblank_entered == false) {
+        vblank_entered = true;
 
-
-    
-    // if (pc == 0xFF72) {
-    //     printf("PULS\n");
-    //     printf("old status %02X\n", mpu_memory[sp + 0x104]);
-    //     pc = 0xFF82;
-    // }
-    // if (pc == 0xFF7F) {
-    //     printf("BRK\n");
-    // }
-    // if (pc == 0xFF82) {
-    //     printf("IRQ\n");
-    // }
-    // if (pc == 0xFD22) {
-    //     printf("START\n");
-    // }
-
-    gotchar = get_absolute_time();
-    if (absolute_time_diff_us(lastgotchar, gotchar) > 16666) {
-        // mpu_memory[VIA2_T1CH] = 0;
-        // mpu_memory[VIA2_T1CL] = 0;
-
-        
-
-        // cnt++;
-        // if (cnt % 120 == 0) {
-        //     uint64_t elapsed = absolute_time_diff_us(start, gotchar);
-        //     float mhz = (float) clockticks6502 / (float) elapsed;
-        //     printf("speed: %.3f\n", mhz);
-        // }
-        
-
-            //printf("timer int %02X\n", tube_irq);
         if ((mpu_memory[VIA2_ACR] & mpu_memory[VIA2_IER] & 0x40) && ((status & FLAG_INTERRUPT) == 0)) {
             mpu_memory[VIA2_IFR] = 0xC0;
             status  &= ~FLAG_BREAK;  // WHY ????
@@ -207,23 +182,7 @@ void callback() {
         }
 
 
-        lastgotchar = gotchar;
-        // int chr = getchar_timeout_us(0);
-        // if (chr != PICO_ERROR_TIMEOUT) {
-        //     // POke character in memory
-        //     uint8_t nb_chars = mpu_memory[CHAR_BUFFER_NUM_ADDRESS];
-        //     if (chr > 0x60) {
-        //         chr = chr-0x20;
-        //     }
-        //     if ((chr & 0xFF) == 3) {
-        //         chr = 23;
-        //     }
-        //     unsigned char s[] = {(uint8_t) (chr & 0xFF), 0};
-        //     printf("%s", &s);
-
-        //     mpu_memory[CHAR_BUFFER_ADDRESS + nb_chars] = (uint8_t) (chr & 0xFF);
-        //     mpu_memory[CHAR_BUFFER_NUM_ADDRESS] = nb_chars + 1;
-        // }
+        // lastgotchar = gotchar;
 
         //Fill framebuffer
         uint8_t *b = (uint8_t *) pxbuf;
@@ -243,38 +202,42 @@ void callback() {
                 bgcolor = (c >> 4) & 0xF;
                 inverted = (c >> 3) & 0x1;
                 for (uint x=0; x < H_BORDER_SIZE; x++) {
-                *b++ = rgb8[c & 0x07];
+                    *b++ = rgb8[c & 0x07];
                 }
                 for (uint x=0; x < CHAR_WIDTH; x++) {
-                uint yy = y - V_BORDER_SIZE;
-                uint16_t offset = (yy >> 3) * CHAR_WIDTH + x;
+                    uint yy = y - V_BORDER_SIZE;
+                    uint16_t offset = (yy >> 3) * CHAR_WIDTH + x;
 
-                // Get the character at this position
-                uint8_t ch = (uint8_t)mpu_memory[SCREEN_ADDR + offset];
-                // Get the character foreground color
-                fgcolor = (uint8_t)mpu_memory[COLOUR_ADDR + offset];
-                // Get the character data
-                uint16_t bit_data_addr = CHAR_ROM_ADDR + (((uint16_t) ch) << 3) + ((uint16_t)yy & 0x7);
-                uint8_t pixels = (uint8_t)mpu_memory[bit_data_addr];
+                    // Get the character at this position
+                    uint8_t ch = (uint8_t)mpu_memory[SCREEN_ADDR + offset];
+                    // Get the character foreground color
+                    fgcolor = (uint8_t)mpu_memory[COLOUR_ADDR + offset];
+                    // Get the character data
+                    uint16_t bit_data_addr = CHAR_ROM_ADDR + (((uint16_t) ch) << 3) + ((uint16_t)yy & 0x7);
+                    uint8_t pixels = (uint8_t)mpu_memory[bit_data_addr];
 
-                for (uint p = 0; p < 8; p++) {
-                    bool pixel = (pixels >> (7-p)) & 1;
-                    if (inverted) {
-                        *b++ = pixel ? rgb8[fgcolor & 0xF] : rgb8[bgcolor & 0xF];
-                    } else {
-                        *b++ = pixel ? rgb8[bgcolor & 0xF] : rgb8[fgcolor & 0xF];
+                    for (uint p = 0; p < 8; p++) {
+                        bool pixel = (pixels >> (7-p)) & 1;
+                        if (inverted) {
+                            *b++ = pixel ? rgb8[fgcolor & 0xF] : rgb8[bgcolor & 0xF];
+                        } else {
+                            *b++ = pixel ? rgb8[bgcolor & 0xF] : rgb8[fgcolor & 0xF];
+                        }
                     }
-                    
-                    //*b++ = inverted ? (pixel ? rgb555[bgcolor & 0xF] : rgb555[fgcolor & 0xF]) : (pixel ? rgb555[fgcolor & 0xF] : rgb555[bgcolor & 0xF]);
-                }
                 }
 
                 for (uint x=0; x < H_BORDER_SIZE; x++) {
-                *b++ = rgb8[c & 0x07];
+                    *b++ = rgb8[c & 0x07];
                 }
             }
         }
+    } else {
+        vblank_entered = false;
     }
+
+    // if (absolute_time_diff_us(lastgotchar, gotchar) > 16666) {
+        
+    // }
 }
 
 bool ignoreNext = false;
@@ -334,13 +297,15 @@ int main() {
     for (int i = 0; i < 0x10000; i++) {
         mpu_memory[i] = 0;
     }
-    
+
     for (int i = 0x8000; i < 0x9000; i++) {
         mpu_memory[i] = characters[i-0x8000];
     }
+
     for (int i = 0xC000; i < 0xE000; i++) {
         mpu_memory[i] = basic[i-0xC000];
     }
+
     for (int i = 0xE000; i < 0x10000; i++) {
         mpu_memory[i] = kernal[i-0xE000];
     }
@@ -354,7 +319,6 @@ int main() {
     gpio_set_dir(LED_PIN, GPIO_OUT);
     gpio_put(LED_PIN, 1);
 
-    initkb();
 
     // Load the ps2 program, and configure a free state machine
     // to run the program.
@@ -368,13 +332,13 @@ int main() {
 
     //hookexternal(callback);
 
-    while(1) {
+    while(running) {
         callback();
         
         if (pio_sm_get_rx_fifo_level(pio, sm) > 0) {
             uint32_t rxdata = pio_sm_get_blocking(pio, sm);
             uint8_t charcode = ( rxdata >> 22) & 0xFF;
-            printf("%02X\n", charcode);
+            // printf("%02X\n", charcode);
             
             if (charcode == 0xAA) {
                 printf("got AA from kb");

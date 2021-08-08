@@ -15,12 +15,6 @@ project(picovic2 C CXX ASM)
 include_directories(scanvideo)
 
 add_executable(picovic2
-    # handler.c
-    # handler.h
-    vic.c
-    vic.h
-    # cpu_6502M0.S
-    # cpu_6502.c
     scanvideo/vga_modes.c
     scanvideo/composable_scanline.h
     scanvideo/scanvideo.h
@@ -28,6 +22,8 @@ add_executable(picovic2
     scanvideo/buffer.h
     scanvideo/buffer.c
     scanvideo/scanvideo_base.h
+    vic.c
+    vic.h
     main.c
 )
 

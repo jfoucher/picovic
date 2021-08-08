@@ -126,19 +126,6 @@
 #define PS2_thorn			254 // þ
 #define PS2_y_DIAERESIS			255 // ÿ
 
-void initkb() {
-    sleep_ms(200);
-    gpio_init(16);
-    gpio_init(17);
-    gpio_set_dir(16, GPIO_OUT);
-    gpio_set_dir(17, GPIO_OUT);
-    gpio_put(16, 0);
-    sleep_ms(20);
-
-    gpio_set_dir(16, GPIO_IN);
-    gpio_set_dir(17, GPIO_IN);
-    sleep_ms(20);
-}
 
 const uint8_t keymap_US[] = {0, PS2_F9, 0, PS2_F5, PS2_F3, PS2_F1, PS2_F2, PS2_F12,
 	0, PS2_F10, PS2_F8, PS2_F6, PS2_F4, PS2_TAB, '`', 0,

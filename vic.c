@@ -10,10 +10,7 @@
 
 uint8_t* px_buf;
 
-
 uint16_t multiplier=1;
-
-
 
 void vic_init(uint8_t* buf) {
     px_buf = buf;
