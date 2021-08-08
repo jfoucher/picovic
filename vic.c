@@ -14,6 +14,7 @@ uint8_t* px_buf;
 uint16_t multiplier=1;
 
 
+
 void vic_init(uint8_t* buf) {
     px_buf = buf;
     multiplier = vga_mode.width / _VIC20_STD_DISPLAY_WIDTH;
@@ -112,3 +113,4 @@ void vic_draw_color_bar(scanvideo_scanline_buffer_t *buffer) {
 
     buffer->status = SCANLINE_OK;
 }
+
