@@ -14,3 +14,5 @@ VGA output is based on the scanvideo code from [pico-extra](https://github.com/r
 The emulation is extremely basic and for example the VIAs are only emulated so that the cursor works in BASIC. The VIC chip only has the most simple functionality, in the interest of speed and laziness. However since for the time being the emulated speed is higher than the original VIC-20, more functionality will be added in the future.
 
 ![running basic](output.gif)
+
+[Running BASIC video](basic.mp4)
