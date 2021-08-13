@@ -16,13 +16,6 @@ void vic_init(uint8_t* buf) {
 }
 
 
-void vic_get_screen_sz(uint16_t *width, uint16_t *height)
-{
-    *width = CHAR_WIDTH * 8;
-    *height = CHAR_HEIGHT * 8;
-}
-
-
 void __time_critical_func(vic_draw_color_bar)(scanvideo_scanline_buffer_t *buffer) {
     uint line_num = scanvideo_scanline_number(buffer->scanline_id);
     uint line_index = (line_num * _VIC20_STD_DISPLAY_HEIGHT) / vga_mode.height;
@@ -85,6 +78,7 @@ void __time_critical_func(vic_draw_color_bar)(scanvideo_scanline_buffer_t *buffe
         tokens += 3;
     }
 
+    // Write last part of border
     *p++ = COMPOSABLE_COLOR_RUN;
     *p++ = (uint16_t) color;
     *p++ = (uint16_t) ((vga_mode.width - _VIC20_STD_DISPLAY_WIDTH*multiplier)/2 - 4);

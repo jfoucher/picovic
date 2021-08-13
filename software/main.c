@@ -102,6 +102,7 @@ void push_audio() {
 absolute_time_t start;
 bool running = true;
 bool runstop_pressed = false;
+bool delete_pressed = false;
 
 uint8_t __time_critical_func(read6502)(uint16_t address) {
     if (address == VIA2_PORTA2) {
@@ -136,6 +137,9 @@ void write6502(uint16_t address, uint8_t data) {
         // printf("writing %02X to portB\n", data);
         if (runstop_pressed && data == 0xF7) {
             mpu_memory[VIA2_PORTA] = 0xFE;
+        } else if (delete_pressed && data == 0xFE) {
+            printf("del pressed");
+            mpu_memory[VIA2_PORTA] = 0xEF;
         } else {
             mpu_memory[VIA2_PORTA] = 0;
         }
@@ -336,9 +340,12 @@ int main() {
                 // break code
                 ignoreNext = true;
             } else if (charcode == 0x76 && !ignoreNext) {
-                // break code
+                // run/stop mapped to ESC
                 runstop_pressed = true;
-            } else if ((charcode == 0x12 || charcode == 0x59) && !ignoreNext) {
+            } else if (charcode == 0x66 && !ignoreNext) {
+                // run/stop mapped to ESC
+                delete_pressed = true;
+            }  else if ((charcode == 0x12 || charcode == 0x59) && !ignoreNext) {
                 // shift code
                 shifted = true;
             } else if (!ignoreNext) {
@@ -348,12 +355,14 @@ int main() {
                 }
                 
                 uint8_t nb_chars = mpu_memory[CHAR_BUFFER_NUM_ADDRESS];
+                // convert to uppercase
                 if (chr > 0x60) {
                     chr = chr-0x20;
                 }
-                if ((chr & 0xFF) == 3) {
-                    chr = 23;
-                }
+                //Backspace
+                // if ((chr & 0xFF) == 3) {
+                //     chr = 23;
+                // }
 
                 mpu_memory[CHAR_BUFFER_ADDRESS + nb_chars] = (uint8_t) (chr & 0xFF);
                 mpu_memory[CHAR_BUFFER_NUM_ADDRESS] = nb_chars + 1;
@@ -365,11 +374,13 @@ int main() {
                     shifted = false;
                 } else if (charcode == 0x76) {
                     runstop_pressed = false;
+                } else if (charcode == 0x66) {
+                    delete_pressed = false;
                 }
             }
         }
         
-
+#endif
         step6502();  
     }
 
