@@ -61,17 +61,9 @@ uint8_t pxbuf[_VIC20_STD_DISPLAY_WIDTH * _VIC20_STD_DISPLAY_HEIGHT];
 
 absolute_time_t start;
 
-volatile int tube_irq;
-
 void core1_func();
 static semaphore_t video_initted;
 
-absolute_time_t gotchar;
-absolute_time_t lastgotchar;
-
-absolute_time_t start;
-
-volatile int tube_irq;
 
 uint8_t mpu_memory[64*1024];
 
@@ -125,7 +117,7 @@ uint8_t __time_critical_func(read6502)(uint16_t address) {
     return mpu_memory[address];
 }
 
-void __time_critical_func(write6502)(uint16_t address, uint8_t data) {
+void write6502(uint16_t address, uint8_t data) {
     if (mpu_memory[VIA2_IFR] && address == VIA2_T1CH) {
         // Clear interrupt
         mpu_memory[VIA2_IFR] &= ~0xC0;
@@ -169,7 +161,7 @@ void __time_critical_func(write6502)(uint16_t address, uint8_t data) {
 uint cnt = 0;
 bool vblank_entered = false;
 
-static void __time_critical_func(callback)() {
+static void callback() {
     // gotchar = get_absolute_time();
     if (scanvideo_in_vblank() && vblank_entered == false) {
         vblank_entered = true;
@@ -311,8 +303,6 @@ int main() {
     }
 
     vic_init(pxbuf);
-    gotchar = get_absolute_time();
-    lastgotchar = get_absolute_time();
 
     const uint LED_PIN = PICO_DEFAULT_LED_PIN;
     gpio_init(LED_PIN);

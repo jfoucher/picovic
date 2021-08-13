@@ -1,8 +1,6 @@
 /*
  * vic.c
  *
- *  Created on: Dec 25, 2015
- *      Author: kevin
  */
 #include <stdlib.h>
 #include <stdio.h>
