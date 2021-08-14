@@ -138,10 +138,11 @@ void write6502(uint16_t address, uint8_t data) {
         if (runstop_pressed && data == 0xF7) {
             mpu_memory[VIA2_PORTA] = 0xFE;
         } else if (delete_pressed && data == 0xFE) {
-            printf("del pressed");
             mpu_memory[VIA2_PORTA] = 0x7F;
-        } else {
+        } else if (data == 0) {
             mpu_memory[VIA2_PORTA] = 0;
+        } else {
+            mpu_memory[VIA2_PORTA] = 0xFF;
         }
     }
     else if (address == VIA2_IER) {
