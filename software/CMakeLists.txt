@@ -19,9 +19,7 @@ add_compile_options(-Wall
 add_definitions(-DPICO=1)
 add_definitions(-DUSE_MEMORY_POINTER=1)
 
-
 pico_sdk_init()
-
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -41,14 +39,10 @@ add_executable(picovic
     main.c
 )
 
-
-
-
-
-
-# Pull in our pico_stdlib which aggregates commonly used features
+# Link libraries
 target_link_libraries(picovic pico_stdlib hardware_timer hardware_vreg pico_multicore hardware_pio hardware_dma hardware_irq)
 
+# generate PIO headers
 pico_generate_pio_header(picovic ${CMAKE_CURRENT_LIST_DIR}/scanvideo/scanvideo.pio)
 pico_generate_pio_header(picovic ${CMAKE_CURRENT_LIST_DIR}/scanvideo/timing.pio)
 pico_generate_pio_header(picovic ${CMAKE_CURRENT_LIST_DIR}/ps2/ps2.pio)
@@ -60,5 +54,3 @@ pico_enable_stdio_uart(picovic 0)
 
 # create map/bin/hex/uf2 file etc.
 pico_add_extra_outputs(picovic)
-
-#target_link_options(6502emu PRIVATE LINKER:--sort-section=alignment)
