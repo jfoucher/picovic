@@ -139,7 +139,7 @@ void write6502(uint16_t address, uint8_t data) {
             mpu_memory[VIA2_PORTA] = 0xFE;
         } else if (delete_pressed && data == 0xFE) {
             printf("del pressed");
-            mpu_memory[VIA2_PORTA] = 0xEF;
+            mpu_memory[VIA2_PORTA] = 0x7F;
         } else {
             mpu_memory[VIA2_PORTA] = 0;
         }
@@ -343,7 +343,7 @@ int main() {
                 // run/stop mapped to ESC
                 runstop_pressed = true;
             } else if (charcode == 0x66 && !ignoreNext) {
-                // run/stop mapped to ESC
+                // del mapped to backspace
                 delete_pressed = true;
             }  else if ((charcode == 0x12 || charcode == 0x59) && !ignoreNext) {
                 // shift code
@@ -380,7 +380,6 @@ int main() {
             }
         }
         
-#endif
         step6502();  
     }
 
