@@ -24,28 +24,46 @@ pico_sdk_init()
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(scanvideo)
+add_subdirectory(FatFs_SPI build)
+
+add_subdirectory(scanvideo)
+
+
 
 add_executable(picovic
-    scanvideo/vga_modes.c
-    scanvideo/composable_scanline.h
-    scanvideo/scanvideo.h
-    scanvideo/scanvideo.c
-    scanvideo/buffer.h
-    scanvideo/buffer.c
-    scanvideo/scanvideo_base.h
     vic.c
     vic.h
     main.c
 )
 
+
 # Link libraries
-target_link_libraries(picovic pico_stdlib hardware_timer hardware_vreg pico_multicore hardware_pio hardware_dma hardware_irq)
+target_link_libraries(picovic
+    pico_stdlib
+    hardware_timer
+    hardware_vreg
+    pico_multicore
+    hardware_pio
+    hardware_dma
+    hardware_irq
+    FatFs_SPI
+    scanvideo
+)
+
+pico_set_program_name(picovic "picovic")
+pico_set_program_version(picovic "0.0.2")
 
 # generate PIO headers
-pico_generate_pio_header(picovic ${CMAKE_CURRENT_LIST_DIR}/scanvideo/scanvideo.pio)
-pico_generate_pio_header(picovic ${CMAKE_CURRENT_LIST_DIR}/scanvideo/timing.pio)
 pico_generate_pio_header(picovic ${CMAKE_CURRENT_LIST_DIR}/ps2/ps2.pio)
+
+# Get number of SD cards from the environment, else set to 1:
+#   In Visual Studio this can be set in .vscode/settings.json. E.g.:
+#      "cmake.configureArgs": ["-DN_SD_CARDS=2"],
+IF (NOT DEFINED N_SD_CARDS)
+    SET(N_SD_CARDS 1)
+ENDIF()
+# Set DEBUG and N_SD_CARDS compile definitions:
+target_compile_definitions(picovic PUBLIC DEBUG=1 N_SD_CARDS=${N_SD_CARDS})
 
 
 # enable usb output, disable uart output

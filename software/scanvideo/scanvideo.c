@@ -1433,6 +1433,7 @@ bool scanvideo_setup_with_timing(const scanvideo_mode_t *mode, const scanvideo_t
     irq_set_priority(PIO0_IRQ_1, 0x40); // lower priority by 1
 #endif
 
+    //printf("DMA mask %08X", PICO_SCANVIDEO_SCANLINE_DMA_CHANNELS_MASK);
     dma_claim_mask(PICO_SCANVIDEO_SCANLINE_DMA_CHANNELS_MASK);
     dma_set_irq0_channel_mask_enabled(PICO_SCANVIDEO_SCANLINE_DMA_CHANNELS_MASK, true);
 

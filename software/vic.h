@@ -9,12 +9,13 @@
 #define VIC_H_
 
 #include <stdint.h>
-#include "scanvideo/scanvideo.h"
-#include "scanvideo/scanvideo_base.h"
-
-#include "scanvideo/composable_scanline.h"
 #include "pico/multicore.h"
 #include "pico/sync.h"
+
+#include "scanvideo.h"
+#include "scanvideo_base.h"
+#include "composable_scanline.h"
+
 #define _VIC20_STD_DISPLAY_WIDTH (232)  /* actually 229, but rounded up to 8x */
 #define _VIC20_STD_DISPLAY_HEIGHT (272)
 

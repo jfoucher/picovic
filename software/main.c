@@ -9,17 +9,19 @@
 
 #define PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT 64
 
+
+
 #include "pico/stdlib.h"
 #include "pico/time.h"
-#include "hardware/clocks.h"
-#include "hardware/vreg.h"
 #include "pico/time.h"
-#include "pico/multicore.h"
-#include "scanvideo/scanvideo.h"
-#include "scanvideo/composable_scanline.h"
 #include "pico/sync.h"
 #include "hardware/clocks.h"
 #include "hardware/vreg.h"
+#include "pico/multicore.h"
+
+#include "scanvideo.h"
+#include "composable_scanline.h"
+
 #include "cpu_6502.c"
 #include "vic.h"
 #include "kernal.h"
@@ -29,18 +31,21 @@
 #include "ps2/ps2.h"
 
 
+#include "ff.h"
+#include "f_util.h"
+#include "rtc.h"
+
+
 
 #define CHAR_BUFFER_ADDRESS 0x277
 #define CHAR_BUFFER_NUM_ADDRESS 0xC6
 // If this is active, then an overclock will be applied
 #define OVERCLOCK
-// Comment this to run your own ROM
-//#define TESTING
 
 // Delay startup by so many seconds
-//#define START_DELAY 6
+#define START_DELAY 6
 
-#define PS2_INPUT_PIN_BASE 16
+#define PS2_INPUT_PIN_BASE 20
 
 #define VIA2_BASE (0x9120)
 #define VIA2_PORTB  (VIA2_BASE)
@@ -118,7 +123,7 @@ uint8_t __time_critical_func(read6502)(uint16_t address) {
     return mpu_memory[address];
 }
 
-void write6502(uint16_t address, uint8_t data) {
+void __time_critical_func(write6502)(uint16_t address, uint8_t data) {
     if (mpu_memory[VIA2_IFR] && address == VIA2_T1CH) {
         // Clear interrupt
         mpu_memory[VIA2_IFR] &= ~0xC0;
@@ -166,7 +171,7 @@ void write6502(uint16_t address, uint8_t data) {
 uint cnt = 0;
 bool vblank_entered = false;
 
-static void callback() {
+static void __time_critical_func(callback)() {
     // gotchar = get_absolute_time();
     if (scanvideo_in_vblank() && vblank_entered == false) {
         vblank_entered = true;
@@ -231,10 +236,6 @@ static void callback() {
     } else {
         vblank_entered = false;
     }
-
-    // if (absolute_time_diff_us(lastgotchar, gotchar) > 16666) {
-        
-    // }
 }
 
 bool ignoreNext = false;
@@ -247,6 +248,7 @@ int main() {
     set_sys_clock_khz(260000, true);
 #endif
     stdio_init_all();
+    time_init();
 
 #ifdef START_DELAY
     for(uint8_t i = START_DELAY; i > 0; i--) {
@@ -266,7 +268,26 @@ int main() {
     sem_acquire_blocking(&video_initted);
 
 
-    start = get_absolute_time();
+    //start = get_absolute_time();
+
+
+    // See FatFs - Generic FAT Filesystem Module, "Application Interface", http://elm-chan.org/fsw/ff/00index_e.html
+    static FATFS fatfs;
+    printf("mounting\n");
+
+    FRESULT fr = f_mount(&fatfs, "", 1); 
+    
+
+    printf("opening file\n");
+
+    FIL fil;
+
+    const char * filename = "1.d64";
+
+    fr = f_open(&fil, filename, FA_OPEN_EXISTING | FA_READ | FA_OPEN_ALWAYS);
+    if (FR_OK != fr && FR_EXIST != fr) printf("f_open(%s) error: %s (%d)\n", filename, FRESULT_str(fr), fr);
+    UINT file_size = (&fil)->obj.objsize;
+    char buf[file_size];
 
 
     /*
@@ -291,6 +312,7 @@ int main() {
 
     */
 
+
     for (int i = 0; i < 0x10000; i++) {
         mpu_memory[i] = 0;
     }
@@ -309,10 +331,10 @@ int main() {
 
     vic_init(pxbuf);
 
-    const uint LED_PIN = PICO_DEFAULT_LED_PIN;
-    gpio_init(LED_PIN);
-    gpio_set_dir(LED_PIN, GPIO_OUT);
-    gpio_put(LED_PIN, 1);
+
+    // gpio_init(PICO_DEFAULT_LED_PIN);
+    // gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    // gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
 
     // Load the ps2 program, and configure a free state machine
@@ -329,6 +351,15 @@ int main() {
 
     while(running) {
         callback();
+
+        f_lseek(&fil, 0);
+        char* t = f_gets(buf, 9000, &fil);
+        while (t) {
+            printf("%s\n", buf);
+            t = f_gets(buf, 9000, &fil);
+        }
+
+        //f_unmount("");
         
         if (pio_sm_get_rx_fifo_level(pio, sm) > 0) {
             uint32_t rxdata = pio_sm_get_blocking(pio, sm);
