@@ -287,23 +287,6 @@ int main() {
     unsigned char buff[23];
     UINT br;
 
-    FIL file;
-    FRESULT r = f_open(&file, "1.d64", FA_OPEN_EXISTING | FA_READ);
-
-    if (r != FR_OK) {
-        printf("f_open error: %s (%d)\n", FRESULT_str(fr), fr);
-    }
-
-    f_lseek(&file, 91536);
-    r = f_read(&file, &buff, 23, &br);
-    if (r != FR_OK) {
-        printf("read title f_read error: %s (%d) offset: %ld\n", FRESULT_str(fr), fr, 91536);
-    }
-
-    for (int n = 0; n< 23; n++)  {
-        printf("byte %d is: %02X\n", n, buff[n]);
-    }
-
 
     DiskImage * di = di_load_image(filename);
 
@@ -319,18 +302,6 @@ int main() {
     printf("di dir track %d\n", di->dir.track);
     printf("di dir sector %d\n", di->dir.sector);
 
-    sleep_ms(5);
-
-    f_lseek(&file, 91536);
-    r = f_read(di->image, &buff, 23, &br);
-    if (r != FR_OK) {
-        printf("read title f_read error: %s (%d) offset: %ld\n", FRESULT_str(fr), fr, 91536);
-    }
-
-    for (int n = 0; n< 23; n++)  {
-        printf("byte %d is: %02X\n", n, buff[n]);
-    }
-    
     unsigned char name[17];
     unsigned char id[6];
     unsigned char buffer[254];
@@ -359,16 +330,11 @@ int main() {
     printf("title_ptr %ld\n", title_ptr);
 
     f_lseek(di->image, title_ptr);
-    r = f_read(di->image, &buff, 23, &br);
+    FRESULT r = f_read(di->image, &buff, 23, &br);
     if (r != FR_OK) {
         printf("read title f_read error: %s (%d) offset: %ld\n", FRESULT_str(fr), fr, title_ptr);
     }
 
-    for (int n = 0; n< 23; n++)  {
-        printf("byte %d is: %02X\n", n, buff[n]);
-    }
-
-    printf("buffer %s br: %d\n", buff, br);
 
     /* Convert title to ascii */
     di_name_from_rawname(name, buff);
