@@ -6,9 +6,9 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT 64
-
 
 
 #include "pico/stdlib.h"
@@ -29,6 +29,8 @@
 #include "char_rom.h"
 #include "ps2.pio.h"
 #include "ps2/ps2.h"
+
+#include "diskimage/diskimage.h"
 
 
 #include "ff.h"
@@ -277,18 +279,153 @@ int main() {
 
     FRESULT fr = f_mount(&fatfs, "", 1); 
     
-
-    printf("opening file\n");
-
-    FIL fil;
+    if (fr == FR_OK) {
+        printf("mount ok\n");
+    }
 
     const char * filename = "1.d64";
+    unsigned char buff[23];
+    UINT br;
 
-    fr = f_open(&fil, filename, FA_OPEN_EXISTING | FA_READ | FA_OPEN_ALWAYS);
-    if (FR_OK != fr && FR_EXIST != fr) printf("f_open(%s) error: %s (%d)\n", filename, FRESULT_str(fr), fr);
-    UINT file_size = (&fil)->obj.objsize;
-    char buf[file_size];
+    FIL file;
+    FRESULT r = f_open(&file, "1.d64", FA_OPEN_EXISTING | FA_READ);
 
+    if (r != FR_OK) {
+        printf("f_open error: %s (%d)\n", FRESULT_str(fr), fr);
+    }
+
+    f_lseek(&file, 91536);
+    r = f_read(&file, &buff, 23, &br);
+    if (r != FR_OK) {
+        printf("read title f_read error: %s (%d) offset: %ld\n", FRESULT_str(fr), fr, 91536);
+    }
+
+    for (int n = 0; n< 23; n++)  {
+        printf("byte %d is: %02X\n", n, buff[n]);
+    }
+
+
+    DiskImage * di = di_load_image(filename);
+
+    if (di == NULL) {
+        panic("could not load disk image");
+    }
+
+    printf("di name %s\n", di->filename);
+    printf("di size %d\n", di->size);
+    printf("di type %d\n", di->type);
+    printf("di blocks free %d\n", di->blocksfree);
+
+    printf("di dir track %d\n", di->dir.track);
+    printf("di dir sector %d\n", di->dir.sector);
+
+    sleep_ms(5);
+
+    f_lseek(&file, 91536);
+    r = f_read(di->image, &buff, 23, &br);
+    if (r != FR_OK) {
+        printf("read title f_read error: %s (%d) offset: %ld\n", FRESULT_str(fr), fr, 91536);
+    }
+
+    for (int n = 0; n< 23; n++)  {
+        printf("byte %d is: %02X\n", n, buff[n]);
+    }
+    
+    unsigned char name[17];
+    unsigned char id[6];
+    unsigned char buffer[254];
+    char quotename[19];
+    
+    
+    int offs;
+    int type;
+    int closed;
+    int locked;
+    int size;
+    static char *ftype[] = {
+        "del",
+        "seq",
+        "prg",
+        "usr",
+        "rel",
+        "cbm",
+        "dir",
+        "???"
+    };
+
+
+    int title_ptr = di_title(di);
+
+    printf("title_ptr %ld\n", title_ptr);
+
+    f_lseek(di->image, title_ptr);
+    r = f_read(di->image, &buff, 23, &br);
+    if (r != FR_OK) {
+        printf("read title f_read error: %s (%d) offset: %ld\n", FRESULT_str(fr), fr, title_ptr);
+    }
+
+    for (int n = 0; n< 23; n++)  {
+        printf("byte %d is: %02X\n", n, buff[n]);
+    }
+
+    printf("buffer %s br: %d\n", buff, br);
+
+    /* Convert title to ascii */
+    di_name_from_rawname(name, buff);
+    ptoa(name);
+
+    /* Convert ID to ascii */
+    memcpy(id, buff + 18, 5);
+    id[5] = 0;
+    ptoa(id);
+
+    /* Print title and disk ID */
+    printf("0 \"%-16s\" %s\n", name, id);
+    ImageFile *dh;
+
+
+    if ((dh = di_open(di, "$", T_PRG, "rb")) == NULL) {
+        puts("Couldn't open directory");
+    }
+
+    printf("dh mode %d\n", dh->mode);
+
+    /* Read first block into buffer */
+    if (di_read(dh, buffer, 254) != 254) {
+        printf("BAM read failed\n");
+        goto CloseDir;
+    }
+
+    printf("BAM read OK\n");
+
+    /* Read directory blocks */
+    while (di_read(dh, buffer, 254) == 254) {
+        // printf("file read ok");
+        for (offs = -2; offs < 254; offs += 32) {
+            // printf("doing offset %d", offs);
+            /* If file type != 0 */
+            if (buffer[offs+2]) {
+                di_name_from_rawname(name, buffer + offs + 5);
+                type = buffer[offs + 2] & 7;
+                closed = buffer[offs + 2] & 0x80;
+                locked = buffer[offs + 2] & 0x40;
+                size = buffer[offs + 31]<<8 | buffer[offs + 30];
+
+                /* Convert to ascii and add quotes */
+                ptoa(name);
+                sprintf(quotename, "\"%s\"", name);
+
+                /* Print directory entry */
+                printf("%-4d  %-18s%c%s%c\n", size, quotename, closed ? ' ' : '*', ftype[type], locked ? '<' : ' ');
+            }
+        }
+    }
+
+    /* Print number of blocks free */
+    printf("%d blocks free\n", di->blocksfree);
+
+    CloseDir: 
+    for(;;){}
 
     /*
         VIC-20 CPU memory map:
@@ -352,12 +489,12 @@ int main() {
     while(running) {
         callback();
 
-        f_lseek(&fil, 0);
-        char* t = f_gets(buf, 9000, &fil);
-        while (t) {
-            printf("%s\n", buf);
-            t = f_gets(buf, 9000, &fil);
-        }
+        // f_lseek(&fil, 0);
+        // char* t = f_gets(buf, 9000, &fil);
+        // while (t) {
+        //     printf("%s\n", buf);
+        //     t = f_gets(buf, 9000, &fil);
+        // }
 
         //f_unmount("");
         
@@ -410,6 +547,20 @@ int main() {
                     delete_pressed = false;
                 }
             }
+        }
+
+        if (pc == 0xEF19) {
+            // We are reading a byte from the serial bus - acptr
+            pc = 0xEF82;
+            // Put byte in a
+            a = 0;
+            printf("acptr");
+        } else if (pc == 0xEE17) {
+            // set device to listen mode - listn
+        } else if (pc == 0xF495) {
+            // open file from serial - openi
+        } else if (pc == 0xEE40) {
+            // open file from serial - openi
         }
         
         step6502();  

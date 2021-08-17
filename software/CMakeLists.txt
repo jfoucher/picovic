@@ -28,14 +28,12 @@ add_subdirectory(FatFs_SPI build)
 
 add_subdirectory(scanvideo)
 
-
-
 add_executable(picovic
+    diskimage/diskimage.c
     vic.c
     vic.h
     main.c
 )
-
 
 # Link libraries
 target_link_libraries(picovic
