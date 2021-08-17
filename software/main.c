@@ -32,12 +32,9 @@
 
 #include "diskimage/diskimage.h"
 
-
 #include "ff.h"
 #include "f_util.h"
 #include "rtc.h"
-
-
 
 #define CHAR_BUFFER_ADDRESS 0x277
 #define CHAR_BUFFER_NUM_ADDRESS 0xC6
@@ -47,7 +44,7 @@
 // Delay startup by so many seconds
 #define START_DELAY 6
 
-#define PS2_INPUT_PIN_BASE 20
+#define PS2_INPUT_PIN_BASE 14
 
 #define VIA2_BASE (0x9120)
 #define VIA2_PORTB  (VIA2_BASE)
@@ -175,6 +172,7 @@ bool vblank_entered = false;
 
 static void __time_critical_func(callback)() {
     // gotchar = get_absolute_time();
+
     if (scanvideo_in_vblank() && vblank_entered == false) {
         vblank_entered = true;
 
@@ -184,7 +182,6 @@ static void __time_critical_func(callback)() {
             // printf("trigger irq");
             irq6502();
         }
-
 
         // lastgotchar = gotchar;
 
@@ -244,6 +241,16 @@ bool ignoreNext = false;
 bool shifted = false;
 bool ctrl = false;
 
+bool has_sd_card = false;
+const char * filename = "1.d64";
+
+unsigned char byte_buffer[1];
+
+static FATFS fatfs;
+
+DiskImage * di;
+ImageFile * dh;
+
 int main() {
 #ifdef OVERCLOCK
     vreg_set_voltage(VREG_VOLTAGE_1_15);
@@ -260,138 +267,27 @@ int main() {
 #endif
     //printf("Starting\n");
 
-    //prepare vga
-    // create a semaphore to be posted when video init is complete
-    sem_init(&video_initted, 0, 1);
 
-    // launch all the video on core 1, so it isn't affected by USB handling on core 0
-    multicore_launch_core1(core1_func);
-    // wait for initialization of video to be complete
-    sem_acquire_blocking(&video_initted);
 
 
     //start = get_absolute_time();
 
-
-    // See FatFs - Generic FAT Filesystem Module, "Application Interface", http://elm-chan.org/fsw/ff/00index_e.html
-    static FATFS fatfs;
-    printf("mounting\n");
-
-    FRESULT fr = f_mount(&fatfs, "", 1); 
+    FRESULT fr = f_mount(&fatfs, "", 1);
     
     if (fr == FR_OK) {
-        printf("mount ok\n");
-    }
+        printf("Mount SD card OK \n");
+        has_sd_card = true;
+        di = di_load_image(filename);
 
-    const char * filename = "1.d64";
-    unsigned char buff[23];
-    UINT br;
-
-
-    DiskImage * di = di_load_image(filename);
-
-    if (di == NULL) {
-        panic("could not load disk image");
-    }
-
-    printf("di name %s\n", di->filename);
-    printf("di size %d\n", di->size);
-    printf("di type %d\n", di->type);
-    printf("di blocks free %d\n", di->blocksfree);
-
-    printf("di dir track %d\n", di->dir.track);
-    printf("di dir sector %d\n", di->dir.sector);
-
-    unsigned char name[17];
-    unsigned char id[6];
-    unsigned char buffer[254];
-    char quotename[19];
-    
-    
-    int offs;
-    int type;
-    int closed;
-    int locked;
-    int size;
-    static char *ftype[] = {
-        "del",
-        "seq",
-        "prg",
-        "usr",
-        "rel",
-        "cbm",
-        "dir",
-        "???"
-    };
-
-
-    int title_ptr = di_title(di);
-
-    printf("title_ptr %ld\n", title_ptr);
-
-    f_lseek(di->image, title_ptr);
-    FRESULT r = f_read(di->image, &buff, 23, &br);
-    if (r != FR_OK) {
-        printf("read title f_read error: %s (%d) offset: %ld\n", FRESULT_str(fr), fr, title_ptr);
-    }
-
-
-    /* Convert title to ascii */
-    di_name_from_rawname(name, buff);
-    ptoa(name);
-
-    /* Convert ID to ascii */
-    memcpy(id, buff + 18, 5);
-    id[5] = 0;
-    ptoa(id);
-
-    /* Print title and disk ID */
-    printf("0 \"%-16s\" %s\n", name, id);
-    ImageFile *dh;
-
-
-    if ((dh = di_open(di, "$", T_PRG, "rb")) == NULL) {
-        puts("Couldn't open directory");
-    }
-
-    printf("dh mode %d\n", dh->mode);
-
-    /* Read first block into buffer */
-    if (di_read(dh, buffer, 254) != 254) {
-        printf("BAM read failed\n");
-        goto CloseDir;
-    }
-
-    printf("BAM read OK\n");
-
-    /* Read directory blocks */
-    while (di_read(dh, buffer, 254) == 254) {
-        // printf("file read ok");
-        for (offs = -2; offs < 254; offs += 32) {
-            // printf("doing offset %d", offs);
-            /* If file type != 0 */
-            if (buffer[offs+2]) {
-                di_name_from_rawname(name, buffer + offs + 5);
-                type = buffer[offs + 2] & 7;
-                closed = buffer[offs + 2] & 0x80;
-                locked = buffer[offs + 2] & 0x40;
-                size = buffer[offs + 31]<<8 | buffer[offs + 30];
-
-                /* Convert to ascii and add quotes */
-                ptoa(name);
-                sprintf(quotename, "\"%s\"", name);
-
-                /* Print directory entry */
-                printf("%-4d  %-18s%c%s%c\n", size, quotename, closed ? ' ' : '*', ftype[type], locked ? '<' : ' ');
-            }
+        if (di == NULL) {
+            printf("could not load disk image");
+            has_sd_card = false;
         }
     }
 
-    /* Print number of blocks free */
-    printf("%d blocks free\n", di->blocksfree);
-
-    CloseDir: 
-    for(;;){}
+    if (has_sd_card) {
+        printf("SD card image loaded OK\n");
+    }
 
     /*
         VIC-20 CPU memory map:
@@ -439,31 +335,29 @@ int main() {
     // gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     // gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
-
     // Load the ps2 program, and configure a free state machine
     // to run the program.
     PIO pio = pio1;
     uint offset = pio_add_program(pio, &ps2_input_program);
     uint sm = pio_claim_unused_sm(pio, true);
     ps2_input_program_init(pio, sm, offset, PS2_INPUT_PIN_BASE);
-
     
+    printf("reset CPU\n");
     reset6502();
+
+        //prepare vga
+    // create a semaphore to be posted when video init is complete
+    sem_init(&video_initted, 0, 1);
+
+    // launch all the video on core 1, so it isn't affected by USB handling on core 0
+    multicore_launch_core1(core1_func);
+    // wait for initialization of video to be complete
+    sem_acquire_blocking(&video_initted);
 
     //hookexternal(callback);
 
     while(running) {
         callback();
-
-        // f_lseek(&fil, 0);
-        // char* t = f_gets(buf, 9000, &fil);
-        // while (t) {
-        //     printf("%s\n", buf);
-        //     t = f_gets(buf, 9000, &fil);
-        // }
-
-        //f_unmount("");
-        
         if (pio_sm_get_rx_fifo_level(pio, sm) > 0) {
             uint32_t rxdata = pio_sm_get_blocking(pio, sm);
             uint8_t charcode = ( rxdata >> 22) & 0xFF;
@@ -517,16 +411,52 @@ int main() {
 
         if (pc == 0xEF19) {
             // We are reading a byte from the serial bus - acptr
-            pc = 0xEF82;
+            pc = 0xEF81;
             // Put byte in a
-            a = 0;
-            printf("acptr");
+
+            if (di_read(dh, byte_buffer, 1) == 1) {
+                a = byte_buffer[0];
+            } else {
+                mpu_memory[0x90] |= 0x80; // set high bit to signify transfer end
+            }
+            
+            //printf("acptr");
         } else if (pc == 0xEE17) {
             // set device to listen mode - listn
         } else if (pc == 0xF495) {
             // open file from serial - openi
+            // file name address is at fnadr : 0xBB and 0xBC
+            uint8_t fnlen = mpu_memory[0xB7];
+            uint16_t fname_addr = (mpu_memory[0xBC] << 8) | mpu_memory[0xBB];
+            char fname[fnlen+1];
+            for (int n = 0; n < fnlen; n++) {
+                fname[n] = mpu_memory[fname_addr + n];
+            }
+            fname[fnlen] = 0;
+            printf("opening file %s\n", fname);
+            if ((dh = di_open(di, fname, T_PRG, "rb")) == NULL) {
+                puts("Couldn't open file");
+                
+                pc = 0xF4AF; // exit routine with error
+            } else {
+                if (strcmp("$", fname) == 0) {
+                    /* Read first block into buffer */
+                    unsigned char b[254];
+                    if (di_read(dh, b, 254) != 254) {
+                        printf("BAM read failed\n");
+                    }
+                }
+                pc = 0xF4C5; //jump to end of routine
+            }
+
+            
         } else if (pc == 0xEE40) {
-            // open file from serial - openi
+            // load byte from serial - isoura
+            if (di_read(dh, byte_buffer, 1) != 1) {
+                printf("Read failed\n");
+            }
+            a = byte_buffer[0];
+            pc = 0xEEB2;
         }
         
         step6502();  

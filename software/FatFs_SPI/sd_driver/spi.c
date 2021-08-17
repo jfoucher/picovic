@@ -20,7 +20,8 @@
 
 void spi_irq_handler(spi_t *pSPI) {
     // Clear the interrupt request.
-    dma_hw->ints0 = 1u << pSPI->rx_dma;
+    //dma_hw->ints0 = 1u << pSPI->rx_dma;
+    dma_irqn_acknowledge_channel(1, pSPI->rx_dma);
     myASSERT(!dma_channel_is_busy(pSPI->rx_dma));
     sem_release(&pSPI->sem);
 }
@@ -53,7 +54,8 @@ bool spi_transfer(spi_t *pSPI, const uint8_t *tx, uint8_t *rx, size_t length) {
         channel_config_set_write_increment(&pSPI->rx_dma_cfg, false);
     }
     // Clear the interrupt request.
-    dma_hw->ints0 = 1u << pSPI->rx_dma;
+    // dma_hw->ints0 = 1u << pSPI->rx_dma;
+    dma_irqn_acknowledge_channel(1, pSPI->rx_dma);
 
     dma_channel_configure(pSPI->tx_dma, &pSPI->tx_dma_cfg,
                           &spi_get_hw(pSPI->hw_inst)->dr,  // write address
@@ -149,7 +151,7 @@ bool my_spi_init(spi_t *pSPI) {
 
     // Configure the processor to run dma_handler() when DMA IRQ 0 is
     // asserted
-    irq_set_exclusive_handler(DMA_IRQ_1, pSPI->dma_isr);
+    irq_add_shared_handler(DMA_IRQ_1, pSPI->dma_isr, PICO_LOWEST_IRQ_PRIORITY);
 
     // Tell the DMA to raise IRQ line 0 when the channel finishes a block
     dma_channel_set_irq1_enabled(pSPI->rx_dma, true);

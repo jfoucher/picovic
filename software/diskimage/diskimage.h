@@ -93,5 +93,6 @@ int di_rawname_from_name(unsigned char *rawname, unsigned char *name);
 int di_name_from_rawname(unsigned char *name, unsigned char *rawname);
 
 void ptoa(unsigned char *s);
+void atop(unsigned char *s);
 
 #endif

@@ -69,6 +69,20 @@ void ptoa(unsigned char *s) {
   }
 }
 
+void atop(unsigned char *s) {
+  unsigned char c;
+
+  while ((c = *s)) {
+    c &= 0x7f;
+    if (c >= 'A' && c <= 'Z') {
+      c += 32;
+    } else if (c >= 'a' && c <= 'z') {
+      c -= 32;
+    }
+    *s++ = c;
+  }
+}
+
 /** Read byte from image */
 unsigned char read_from_image(DiskImage *di, int offset) {
   unsigned char buff[1];
@@ -852,10 +866,14 @@ RawDirEntry *find_file_entry(DiskImage *di, unsigned char *rawpattern, FileType 
 
   int s = (sizeof(RawDirEntry));
 
-  unsigned char buff[s];
+  unsigned char * buff;
   UINT br;
 
 
+  if ((buff = malloc(s)) == NULL) {
+    printf("could not alloc buff");
+    return NULL;
+  }
   ts = next_ts_in_chain(di, di->bam);
   while (ts.track) {
     buffer = get_ts_addr(di, ts);
@@ -866,7 +884,7 @@ RawDirEntry *find_file_entry(DiskImage *di, unsigned char *rawpattern, FileType 
         return NULL;
       }
 
-      rde = (RawDirEntry *)(&buff);
+      rde = (RawDirEntry *)(buff);
       if ((rde->type & ~0x40) == (type | 0x80)) {
         if (match_pattern(rawpattern, rde->rawname)) {
           return(rde);
@@ -960,12 +978,19 @@ RawDirEntry *alloc_file_entry(DiskImage *di, unsigned char *rawname, FileType ty
 
 
 /* open a file */
-ImageFile *di_open(DiskImage *di, unsigned char *rawname, FileType type, char *mode) {
+ImageFile *di_open(DiskImage *di, unsigned char *name, FileType type, char *mode) {
   ImageFile *imgfile;
   RawDirEntry *rde;
   int p;
 
-  
+  char newname[17];
+  unsigned char rawname[17];
+  strncpy(newname, name, 16);
+
+  newname[16] = 0;
+  atop(newname);
+
+  di_rawname_from_name(rawname, newname);
 
   set_status(di, 255, 0, 0);
 
@@ -974,7 +999,7 @@ ImageFile *di_open(DiskImage *di, unsigned char *rawname, FileType type, char *m
       puts("malloc failed");
       return(NULL);
     }
-    if (strcmp("$", rawname) == 0) {
+    if (strcmp("$", name) == 0) {
       imgfile->mode = 'r';
       imgfile->ts = di->dir;
       p = get_ts_addr(di, di->dir);
@@ -992,16 +1017,16 @@ ImageFile *di_open(DiskImage *di, unsigned char *rawname, FileType type, char *m
         printf("file buffer alloc fail");
         return(NULL);
       }
-      for (int nn = 0; nn < imgfile->buflen; nn++) {
-        file_contents[nn] = read_from_image(di, p + 2 + nn);
-      }
-      // printf("setting file buffer to content");
+
+      UINT br;
+      f_read(di->image, file_contents, imgfile->buflen, &br);
+
       imgfile->buffer = file_contents;
       rde = NULL;
     } else {
       if ((rde = find_file_entry(di, rawname, type)) == NULL) {
         set_status(di, 62, 0, 0);
-        // puts("find_file_entry failed");
+        puts("find_file_entry failed");
         free(imgfile);
         return(NULL);
       }
@@ -1024,11 +1049,9 @@ ImageFile *di_open(DiskImage *di, unsigned char *rawname, FileType type, char *m
         // printf("file buffer alloc fail");
         return(NULL);
       }
-      for (int nn = 0; nn < imgfile->buflen; nn++) {
-        file_contents[nn] = read_from_image(di, p + 2 + nn);
-      }
+      UINT br;
+      f_read(di->image, file_contents, imgfile->buflen, &br);
       imgfile->buffer = file_contents;
-      //imgfile->buffer = p + 2;
     }
   } else if (strcmp("wb", mode) == 0) {
     if ((rde = alloc_file_entry(di, rawname, type)) == NULL) {
