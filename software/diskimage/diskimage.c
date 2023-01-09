@@ -114,7 +114,7 @@ int di_rawname_from_name(unsigned char *rawname, unsigned char *name) {
   int i;
 
   memset(rawname, 0xa0, 16);
-  for (i = 0; i < 16 && name[i]; ++i) {
+  for (i = 0; i < 16 && name[i]; i++) {
     rawname[i] = name[i];
   }
   return(i);
@@ -859,7 +859,7 @@ int match_pattern(unsigned char *rawpattern, unsigned char *rawname) {
 
 
 RawDirEntry *find_file_entry(DiskImage *di, unsigned char *rawpattern, FileType type) {
-  int buffer;
+  int p;
   TrackSector ts;
   RawDirEntry *rde;
   int offset;
@@ -876,16 +876,19 @@ RawDirEntry *find_file_entry(DiskImage *di, unsigned char *rawpattern, FileType 
   }
   ts = next_ts_in_chain(di, di->bam);
   while (ts.track) {
-    buffer = get_ts_addr(di, ts);
+    p = get_ts_addr(di, ts);
     for (offset = 0; offset < 256; offset += 32) {
-      f_lseek(di->image, buffer + offset);
+      f_lseek(di->image, p + offset);
       FRESULT r = f_read (di->image, buff, s, &br);
       if (r != FR_OK) {
+        printf("find_file_entry could not read file\n");
         return NULL;
       }
 
       rde = (RawDirEntry *)(buff);
+      //printf("rde->rawname %s\n", rde->rawname);
       if ((rde->type & ~0x40) == (type | 0x80)) {
+        printf("rde->rawname %s rawpattern: %s\n", rde->rawname, rawpattern);
         if (match_pattern(rawpattern, rde->rawname)) {
           return(rde);
         }
@@ -893,6 +896,7 @@ RawDirEntry *find_file_entry(DiskImage *di, unsigned char *rawpattern, FileType 
     }
     ts = next_ts_in_chain(di, ts);
   }
+  free(buff);
   return(NULL);
 }
 
@@ -984,13 +988,8 @@ ImageFile *di_open(DiskImage *di, unsigned char *name, FileType type, char *mode
   int p;
 
   char newname[17];
-  unsigned char rawname[17];
-  strncpy(newname, name, 16);
+  unsigned char rawname[16];
 
-  newname[16] = 0;
-  atop(newname);
-
-  di_rawname_from_name(rawname, newname);
 
   set_status(di, 255, 0, 0);
 
@@ -1003,7 +1002,7 @@ ImageFile *di_open(DiskImage *di, unsigned char *name, FileType type, char *mode
       imgfile->mode = 'r';
       imgfile->ts = di->dir;
       p = get_ts_addr(di, di->dir);
-
+      
       if ((di->type == D64) || (di->type == D71)) {
         imgfile->nextts.track = 18; // 1541/71 ignores bam t/s link
         imgfile->nextts.sector = 1;
@@ -1019,11 +1018,14 @@ ImageFile *di_open(DiskImage *di, unsigned char *name, FileType type, char *mode
       }
 
       UINT br;
+      f_lseek(di->image, p+2);
       f_read(di->image, file_contents, imgfile->buflen, &br);
 
       imgfile->buffer = file_contents;
       rde = NULL;
     } else {
+      di_rawname_from_name(rawname, name);
+
       if ((rde = find_file_entry(di, rawname, type)) == NULL) {
         set_status(di, 62, 0, 0);
         puts("find_file_entry failed");
@@ -1050,6 +1052,7 @@ ImageFile *di_open(DiskImage *di, unsigned char *name, FileType type, char *mode
         return(NULL);
       }
       UINT br;
+      f_lseek(di->image, p+2);
       f_read(di->image, file_contents, imgfile->buflen, &br);
       imgfile->buffer = file_contents;
     }
@@ -1124,17 +1127,9 @@ int di_read(ImageFile *imgfile, unsigned char *buffer, int len) {
       }
       imgfile->bufptr = 0;
 
-      unsigned char * file_contents;
-      if ((file_contents = malloc(imgfile->buflen)) == NULL) {
-        // printf("file buffer alloc fail\n");
-        return(0);
-      }
-      // printf("file buffer alloc ok\n");
-      for (int nn = 0; nn < imgfile->buflen; nn++) {
-        file_contents[nn] = read_from_image(imgfile->diskimage, p + 2 + nn);
-      }
-      // printf("setting file buffer to content\n");
-      imgfile->buffer = file_contents;
+      UINT br;
+      f_lseek(imgfile->diskimage->image, p+2);
+      f_read(imgfile->diskimage->image, imgfile->buffer, imgfile->buflen, &br);
     } else {
       if (len >= bytesleft) {
         while (bytesleft) {

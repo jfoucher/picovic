@@ -907,7 +907,7 @@
     (at 65.024 15.113)
     (descr "KiCad Logo")
     (tags "Logo KiCad")
-    (attr exclude_from_pos_files exclude_from_bom)
+    (attr board_only exclude_from_pos_files exclude_from_bom)
     (fp_text reference "REF**" (at 0 -5.08) (layer "F.SilkS") hide
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 817faefd-c37e-4802-a5dd-7fecc15a0986)

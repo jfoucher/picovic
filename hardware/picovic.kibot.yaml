@@ -1,0 +1,110 @@
+# Example KiPlot config file
+kibot:
+  version: 1
+
+global:
+  filters:
+    - number: 58
+    
+preflight:
+  run_erc: true
+  update_xml: true
+  run_drc: true
+  check_zone_fills: false
+  ignore_unconnected: false
+  filters:
+    - number: 58
+
+# global:
+#   kiauto_wait_start: 60
+#   kiauto_time_out_scale: 2
+
+outputs:
+  - name: 'print_sch'
+    comment: "Print schematic (PDF)"
+    type: pdf_sch_print
+    dir: .
+    options:
+      output: Schematic.pdf
+      monochrome: true
+
+  - name: 'print_front'
+    comment: "Print F.Cu+F.SilkS"
+    type: pdf_pcb_print
+    dir: .
+    options:
+      output_name: PCB_Top.pdf
+    layers:
+      - layer: F.Cu
+      - layer: F.SilkS
+
+  - name: 'gerbers'
+    comment: "Gerbers for the board house"
+    type: gerber
+    dir: Gerbers
+    options:
+      # generic layer options
+      exclude_edge_layer: true
+      exclude_pads_from_silkscreen: false
+      use_aux_axis_as_origin: false
+      plot_sheet_reference: false
+      plot_footprint_refs: true
+      plot_footprint_values: true
+      force_plot_invisible_refs_vals: false
+      tent_vias: true
+
+      # gerber options
+      line_width: 0.1
+      subtract_mask_from_silk: false
+      use_protel_extensions: false
+      gerber_precision: 4.6
+      create_gerber_job_file: true
+      use_gerber_x2_attributes: true
+      use_gerber_net_attributes: true
+
+    layers:
+      - layer: B.Cu
+        suffix: B_Cu
+      - layer: F.Cu
+        suffix: F_Cu
+      - layer: B.SilkS
+        suffix: B_SilkS
+      - layer: F.SilkS
+        suffix: F_SilkS
+      - layer: F.Paste
+        suffix: F_Paste
+      - layer: B.Paste
+        suffix: B_Paste
+      - layer: F.Mask
+        suffix: F_Mask
+      - layer: B.Mask
+        suffix: B_Mask
+      - layer: Edge.Cuts
+        suffix: Edge_Cuts
+        
+  - name: 'drill'
+    comment: "Drill files"
+    type: gerb_drill
+    dir: Gerbers
+    
+  - name: 'zip'
+    comment: "Gerbers zip file"
+    type: compress
+    options:
+      output: gerbers.zip
+      files:
+        - source: Gerbers/*
+        
+  - name: 'render'
+    comment: "Render 3D view"
+    type: render_3d
+    options:
+      background1: "#FFFFFF"
+      background2: "#FFFFFF"
+      width: 2560
+      height: 1440
+      zoom: 2
+      auto_crop: true
+      ray_tracing: true
+    
+

@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "picovic-rescue")(type "Legacy")(uri "${KIPRJMOD}/picovic-rescue.lib")(options "")(descr ""))
+)

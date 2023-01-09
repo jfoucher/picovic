@@ -1,0 +1,75 @@
+
+stages:
+  - run_erc
+  - run_drc
+  - gen_fab
+  - deploy
+
+image:
+  name: setsoft/kicad_auto:dev_k6
+
+erc:
+  stage: run_erc
+  script:
+    - "cd hardware && [ -f *.kicad_sch ] && kibot -d Fabrication -s update_xml,run_drc -i"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: always
+  artifacts:
+    when: always
+    paths:
+      - Fabrication/
+
+drc:
+  stage: run_drc
+  script:
+    - "cd hardware && [ -f *.kicad_pcb ] && kibot -d Fabrication -s update_xml,run_erc -i"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: on_success
+  artifacts:
+    when: always
+    paths:
+      - Fabrication/
+
+
+sch_outputs:
+  stage: gen_fab
+  script:
+    - "cd hardware && [ -f *.kicad_sch ] && kibot -d Fabrication -s run_drc,run_erc print_sch"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: on_success
+  artifacts:
+    when: always
+    paths:
+      - Fabrication/
+
+pcb_outputs:
+  stage: gen_fab
+  script:
+    - "cd hardware && [ -f *.kicad_pcb ] && kibot -d Fabrication -s all print_front gerbers drill zip render && rm -rf Fabrication/Gerbers"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: on_success
+  artifacts:
+    when: always
+    paths:
+      - Fabrication/
+
+copy_artifacts:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: on_success
+  script:
+    - apt-get update -y && apt-get install rsync -y
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -p 2543 144.76.104.209
+    - ssh-keyscan -p 2543 144.76.104.209|grep rsa >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    - rsync -rvz -e 'ssh -p 2543' ./Fabrication/* deploy@144.76.104.209:/home/deploy/gerbers/picovic

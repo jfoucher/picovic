@@ -42,7 +42,7 @@
 #define OVERCLOCK
 
 // Delay startup by so many seconds
-#define START_DELAY 6
+// #define START_DELAY 6
 
 #define PS2_INPUT_PIN_BASE 14
 
@@ -330,6 +330,8 @@ int main() {
 
     vic_init(pxbuf);
 
+    sleep_ms(100);
+
 
     // gpio_init(PICO_DEFAULT_LED_PIN);
     // gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
@@ -409,35 +411,55 @@ int main() {
             }
         }
 
+        step6502();  
+
         if (pc == 0xEF19) {
             // We are reading a byte from the serial bus - acptr
-            pc = 0xEF81;
+            pc = 0xEF7F;
             // Put byte in a
 
-            if (di_read(dh, byte_buffer, 1) == 1) {
+            if (di_read(dh, &byte_buffer, 1) == 1) {
                 a = byte_buffer[0];
+                mpu_memory[0xA4] = a;
             } else {
-                mpu_memory[0x90] |= 0x80; // set high bit to signify transfer end
+                mpu_memory[0x90] |= 0x40; // set bit 6 to signify transfer end
             }
             
-            //printf("acptr");
+            // printf("acptr %s %02X \n", byte_buffer, byte_buffer[0]);
         } else if (pc == 0xEE17) {
             // set device to listen mode - listn
         } else if (pc == 0xF495) {
             // open file from serial - openi
+            // 0xB8 is current file logical addr - la
+            // 0xB9 is current file 2nd addr - sa
+            // 0xBA is current file primary addr - fa
+
+            printf("la: %02X - sa: %02X - fa: %02X\n", mpu_memory[0xB8], mpu_memory[0xB9], mpu_memory[0xBA]);
             // file name address is at fnadr : 0xBB and 0xBC
             uint8_t fnlen = mpu_memory[0xB7];
             uint16_t fname_addr = (mpu_memory[0xBC] << 8) | mpu_memory[0xBB];
-            char fname[fnlen+1];
-            for (int n = 0; n < fnlen; n++) {
+            char fname[17];
+            char b[2];
+            for (int n = 0; n <= fnlen; n++) {
                 fname[n] = mpu_memory[fname_addr + n];
+                b[0] = fname[n];
+                b[1] = 0;
+                printf("byte %d : %s (%02X)\n", n, b, fname[n]);
             }
+
+            for (int n = 0; n <= 32; n++) {
+                b[0] = mpu_memory[fname_addr + n];
+                b[1] = 0;
+                printf("byte %d : %s (%02X)\n", n, b, mpu_memory[fname_addr + n]);
+            }
+
             fname[fnlen] = 0;
-            printf("opening file %s\n", fname);
+            printf("opening file %s len: %d\n", fname, fnlen);
+            mpu_memory[0x90] &= ~0x40;
             if ((dh = di_open(di, fname, T_PRG, "rb")) == NULL) {
                 puts("Couldn't open file");
                 
-                pc = 0xF4AF; // exit routine with error
+                pc = 0xF4AD; // exit routine with error
             } else {
                 if (strcmp("$", fname) == 0) {
                     /* Read first block into buffer */
@@ -445,21 +467,21 @@ int main() {
                     if (di_read(dh, b, 254) != 254) {
                         printf("BAM read failed\n");
                     }
+                    printf("BAM read\n");
                 }
                 pc = 0xF4C5; //jump to end of routine
             }
-
-            
-        } else if (pc == 0xEE40) {
+        } else if (pc == 0xEE49) {
             // load byte from serial - isoura
-            if (di_read(dh, byte_buffer, 1) != 1) {
-                printf("Read failed\n");
-            }
-            a = byte_buffer[0];
+            printf("isoura %02X\n", a);
+            // if (di_read(dh, byte_buffer, 1) == 1) {
+            //     a = byte_buffer[0];
+            // } else {
+            //     mpu_memory[0x90] |= 0x40; // set bit 6 to signify transfer end
+            // }
+            
             pc = 0xEEB2;
         }
-        
-        step6502();  
     }
 
 
