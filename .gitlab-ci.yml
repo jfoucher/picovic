@@ -13,7 +13,7 @@ erc:
   script:
     - "cd hardware && [ -f *.kicad_sch ] && kibot -d Fabrication -s update_xml,run_drc -i"
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
       when: always
   artifacts:
     when: always
@@ -25,7 +25,7 @@ drc:
   script:
     - "cd hardware && [ -f *.kicad_pcb ] && kibot -d Fabrication -s update_xml,run_erc -i"
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
       when: on_success
   artifacts:
     when: always
@@ -38,7 +38,7 @@ sch_outputs:
   script:
     - "cd hardware && [ -f *.kicad_sch ] && kibot -d Fabrication -s run_drc,run_erc print_sch"
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
       when: on_success
   artifacts:
     when: always
@@ -50,7 +50,7 @@ pcb_outputs:
   script:
     - "cd hardware && [ -f *.kicad_pcb ] && kibot -d Fabrication -s all print_front gerbers drill zip render && rm -rf Fabrication/Gerbers"
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
       when: on_success
   artifacts:
     when: always
@@ -60,7 +60,7 @@ pcb_outputs:
 copy_artifacts:
   stage: deploy
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "master"'
       when: on_success
   script:
     - apt-get update -y && apt-get install rsync -y
