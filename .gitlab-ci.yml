@@ -72,4 +72,4 @@ copy_artifacts:
     - ssh-keyscan -p 2543 144.76.104.209
     - ssh-keyscan -p 2543 144.76.104.209|grep rsa >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
-    - rsync -rvz -e 'ssh -p 2543' ./Fabrication/* deploy@144.76.104.209:/home/deploy/gerbers/picovic
+    - rsync -rvz -e 'ssh -p 2543' ./hardware/Fabrication/* deploy@144.76.104.209:/home/deploy/gerbers/picovic
