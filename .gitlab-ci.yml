@@ -18,7 +18,7 @@ erc:
   artifacts:
     when: always
     paths:
-      - Fabrication/
+      - hardware/Fabrication/
 
 drc:
   stage: run_drc
@@ -30,7 +30,7 @@ drc:
   artifacts:
     when: always
     paths:
-      - Fabrication/
+      - hardware/Fabrication/
 
 
 sch_outputs:
@@ -43,7 +43,7 @@ sch_outputs:
   artifacts:
     when: always
     paths:
-      - Fabrication/
+      - hardware/Fabrication/
 
 pcb_outputs:
   stage: gen_fab
@@ -55,13 +55,17 @@ pcb_outputs:
   artifacts:
     when: always
     paths:
-      - Fabrication/
+      - hardware/Fabrication/
 
 copy_artifacts:
   stage: deploy
   rules:
     - if: '$CI_COMMIT_REF_NAME == "master"'
       when: on_success
+  artifacts:
+    when: always
+    paths:
+      - hardware/Fabrication/
   script:
     - apt-get update -y && apt-get install rsync -y
     - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
