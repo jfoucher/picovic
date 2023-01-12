@@ -16,3 +16,7 @@ The emulation is extremely basic and for example the VIAs are only emulated so t
 ![running basic](output.gif)
 
 [Running BASIC video](basic.mp4)
+
+## Hardware
+![PCB 3D view](https://gitlab.com/jfoucher/picovic/-/jobs/artifacts/master/raw/Fabrication/picovic-3D_top.png?job=pcb_outputs)
+I designed a PCB to go with it. You can check out the hardware folder to get the source, or [download the schematic](https://gitlab.com/jfoucher/picovic/-/jobs/artifacts/master/raw/Fabrication/Schematic.pdf?job=sch_outputs) and [gerber files](https://gitlab.com/jfoucher/picovic/-/jobs/artifacts/master/raw/Fabrication/gerbers.zip?job=pcb_outputs).
