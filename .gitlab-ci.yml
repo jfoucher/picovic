@@ -48,7 +48,7 @@ sch_outputs:
 pcb_outputs:
   stage: gen_fab
   script:
-    - "cd hardware && [ -f *.kicad_pcb ] && kibot -d Fabrication -s all print_front gerbers drill zip render && rm -rf Fabrication/Gerbers"
+    - "cd hardware && [ -f *.kicad_pcb ] && kibot -d Fabrication -s run_drc,run_erc print_front gerbers drill zip render && rm -rf Fabrication/Gerbers"
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
