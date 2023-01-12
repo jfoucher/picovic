@@ -14,6 +14,11 @@ preflight:
   ignore_unconnected: false
   filters:
     - number: 58
+  set_text_variables:
+    - command: git describe --tags
+      name: VERSION
+    - name: DATE
+      command: git show -s --format=%cd --date=format:'%Y-%m-%d'
 
 # global:
 #   kiauto_wait_start: 60
