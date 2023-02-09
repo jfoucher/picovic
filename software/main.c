@@ -42,7 +42,7 @@
 #define OVERCLOCK
 
 // Delay startup by so many seconds
-// #define START_DELAY 6
+// #define START_DELAY 3
 
 #define PS2_INPUT_PIN_BASE 14
 
@@ -64,6 +64,7 @@
 uint8_t pxbuf[_VIC20_STD_DISPLAY_WIDTH * _VIC20_STD_DISPLAY_HEIGHT];
 
 absolute_time_t start;
+
 
 void core1_func();
 static semaphore_t video_initted;
@@ -259,6 +260,10 @@ int main() {
     stdio_init_all();
     time_init();
 
+    gpio_init(29);
+    gpio_put(29, false);
+
+
 #ifdef START_DELAY
     for(uint8_t i = START_DELAY; i > 0; i--) {
         printf("Starting in %d \n", i);
@@ -363,10 +368,10 @@ int main() {
         if (pio_sm_get_rx_fifo_level(pio, sm) > 0) {
             uint32_t rxdata = pio_sm_get_blocking(pio, sm);
             uint8_t charcode = ( rxdata >> 22) & 0xFF;
-            // printf("%02X\n", charcode);
+            //printf("%02X\n", charcode);
             
             if (charcode == 0xAA) {
-                printf("got AA from kb");
+                //printf("got AA from kb");
             } else if (charcode == 0xF0) {
                 // break code
                 ignoreNext = true;
